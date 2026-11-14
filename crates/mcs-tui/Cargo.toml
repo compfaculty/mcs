@@ -1,0 +1,10 @@
+[package]
+name = "mcs-tui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mcs-core = { path = "../mcs-core" }
+ratatui = "0.30"
+crossterm = "0.29"

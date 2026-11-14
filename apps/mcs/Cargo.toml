@@ -1,0 +1,10 @@
+[package]
+name = "mcs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mcs-core = { path = "../../crates/mcs-core" }
+mcs-tui = { path = "../../crates/mcs-tui" }
+mcs-native = { path = "../../crates/mcs-native" }

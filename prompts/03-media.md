@@ -1,0 +1,1 @@
+Plan (do not automatically execute) M2 media proof-of-concept for macOS Kitty, including capability negotiation, image protocol and fallback, high-resolution rendering and terminal restoration. Separate media decoding from transport; document limits for remote SSH and terminal graphics/video throughput. Propose a test matrix and dependency choices before implementing.

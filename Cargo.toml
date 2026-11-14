@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+members = ["apps/mcs", "crates/mcs-core", "crates/mcs-tui", "crates/mcs-native"]
+
+[workspace.package]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+version = "0.1.0"
