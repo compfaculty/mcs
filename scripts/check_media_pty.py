@@ -27,8 +27,8 @@ def script(path, body):
     path.chmod(0o700)
 
 
-def wait_for(master, needle, seconds=6):
-    output = bytearray()
+def wait_for(master, needle, seconds=6, initial=b''):
+    output = bytearray(initial)
     deadline = time.monotonic() + seconds
     while needle not in output and time.monotonic() < deadline:
         chunk = drain(master, 0.05)
@@ -97,8 +97,9 @@ exit 0''')
         print('PASS fake Poppler page render/search, resize and cleanup', flush=True)
         open_file('play.mp4')
         played = wait_for(master, b'FAKE_MPV_OWNS_TTY')
-        if b'F4-F8 files' not in played:
-            wait_for(master, b'F4-F8 files')
+        # Preserve a redraw already read with the player marker. Ratatui can skip
+        # blank cells with cursor moves, so match a word rather than a phrase.
+        wait_for(master, b'F4-F8', initial=played)
         assert b'\x1b[?1049l' in played, 'MCS did not suspend alternate screen'
         open_file('fail.mp4')
         wait_for(master, b'failed')

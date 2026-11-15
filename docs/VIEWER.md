@@ -28,11 +28,13 @@ Kitty support is actively queried once at startup (300 ms overall deadline, 4 Ki
 
 Supported routed extensions: MP4, MKV, MOV, WebM, M4V, AVI. F3 prepares optional `mpv` asynchronously, verifies Kitty output availability, and writes a fixed input configuration inside a private temporary directory. MCS restores terminal modes and stops reading/rendering before spawning mpv. On return it reinitializes and fully repaints, including after child failure. Source files and user mpv configuration are never changed.
 
+The output-driver probe allows up to 15 seconds for cold mpv startup, with cancellation and bounded output. Probe errors identify mpv explicitly; this startup deadline does not limit playback duration.
+
 mpv owns fullscreen Kitty playback: Space pauses, Left/Right seeks, Up/Down changes volume, m mutes, Esc/q returns. F10/Ctrl-C requests application exit through cleanup. No MCS chrome is drawn during playback. A child failure leaves a closable error view with browser state preserved.
 
 Configuration/scripts, automatic file loading, playlist/reference expansion, default/builtin key bindings and resume writes are disabled. Only the fixed playback controls are bound, so screenshot/write commands are absent. Logging is quiet to avoid raw filename escape injection. FFmpeg/lavf is selected with a file-only protocol whitelist. These settings are defense in depth, not an OS sandbox; native media parsers remain an untrusted-data boundary. No network URLs or user-supplied player arguments are accepted.
 
-The target is a measured 60-second 720p/30 proof of concept, not a guarantee. Record Kitty/mpv versions, hardware, actual displayed dimensions, elapsed duration, dropped frames, available A/V-sync counters, CPU and peak memory. Pixel fit can reduce the displayed resolution. No real playback/performance acceptance has run on this machine because Kitty/mpv are absent; fake-player tests verify only lifecycle and arguments.
+The target is a measured 60-second 720p/30 proof of concept, not a guarantee. Record Kitty/mpv versions, hardware, actual displayed dimensions, elapsed duration, dropped frames, available A/V-sync counters, CPU and peak memory. Pixel fit can reduce the displayed resolution. Real playback/performance acceptance remains pending; installed mpv 0.42.0 reports Kitty output support, while fake-player tests verify only lifecycle and arguments.
 
 ## Dependencies and verification
 

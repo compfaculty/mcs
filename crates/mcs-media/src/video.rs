@@ -20,6 +20,9 @@ pub enum Outcome {
 }
 
 const BINDINGS: &str = "SPACE cycle pause\nLEFT seek -5\nRIGHT seek 5\nUP add volume 5\nDOWN add volume -5\nm cycle mute\nESC quit\nq quit\nF10 quit 42\nCtrl+c quit 42\n";
+// Cold macOS helper startup can exceed three seconds before listing drivers.
+// Keep a deadline, cancellation and capture limits even for capability queries.
+const PROBE_TIMEOUT: Duration = Duration::from_secs(15);
 
 impl Playback {
     pub fn prepare(path: &Path, token: &AtomicU64, generation: u64) -> io::Result<Self> {
@@ -37,10 +40,16 @@ impl Playback {
             program,
             &["--no-config".into(), "--vo=help".into()],
             256 * 1024,
-            Duration::from_secs(3),
+            PROBE_TIMEOUT,
             token,
             generation,
-        )?;
+        )
+        .map_err(|error| {
+            io::Error::new(
+                error.kind(),
+                format!("mpv output-driver probe failed: {error}"),
+            )
+        })?;
         if !String::from_utf8_lossy(&output)
             .lines()
             .any(|line| line.split_whitespace().next() == Some("kitty"))

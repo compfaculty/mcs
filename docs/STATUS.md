@@ -1,5 +1,17 @@
 # Status / handoff
 
+## 2026-11-15 — MP4 startup probe timeout
+
+User reported F3 MP4 showing `Helper timed out`. Baseline repository was clean and workspace check/format/strict Clippy/tests passed (65 tests, two optional Poppler experiments ignored). Installed `/opt/homebrew/bin/mpv` 0.42.0 took 3.952 seconds for `--no-config --vo=help`, successfully reporting Kitty support; MCS's three-second probe deadline was too short. This failure precedes decoding the selected MP4.
+
+Changed `crates/mcs-media/src/video.rs` to allow 15 seconds for the asynchronous output-driver probe and identify mpv in probe errors. Cancellation, output limits, child reaping and local-only playback arguments remain unchanged. `src/lib.rs` adds a 3.2-second fake-startup regression plus cancellation of a stuck probe. `docs/VIEWER.md` documents the deadline and corrects the obsolete claim that mpv is absent. No dependencies, OS settings, privileges or user media files changed.
+
+`scripts/check_media_pty.py` initially failed after successful fake playback because Ratatui emits `F4-F8` and `files` separated by cursor positioning. A first attempt to preserve output across reads did not resolve that phrase-matching assumption; the final harness preserves prior output and matches the single `F4-F8` token. Final release media checks passed, including image/PDF cleanup, playback success/failure, repaint and termios/cursor/screen restoration. A second harness invocation delegated only the driver probe to installed mpv; it passed through MCS with playback still simulated.
+
+Executed successfully: focused slow-probe/cancellation test; final `cargo check --workspace`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace` (66 passed, two optional Poppler experiments ignored); `cargo build -p mcs`; `cargo build --release -p mcs`; release media and browser PTY suites; `git diff --check`. Manual release tool-PTY launch and q exit printed `TERMINAL_MODES_RESTORED exit=0`.
+
+Security review: the probe remains bounded and cancellable; typed process arguments and playback restrictions are unchanged. Existing helper timeout/output/failure and safe-player-argument tests passed. Separate advisory/SAST scans were not run for this focused deadline/error-context change. No live Kitty decoding, A/V sync or performance acceptance is claimed. Next action: restart MCS from the normal outer shell with `cargo run --release -p mcs -- --backend tui` and retry the MP4. No commit/push performed.
+
 ## 2026-11-15 — Commander function-key positions
 
 User requested conventional function-key operations rather than custom menu-letter positions. Checked the upstream Midnight Commander manual/keymap (https://source.midnight-commander.org/man/mc.html and https://github.com/MidnightCommander/mc/blob/master/misc/mc.default.keymap). Browser tiles now use F1 Help, F2 Actions, F3 View, F4 Edit, F5 Copy, F6 Move, F7 Mkdir, F8 Delete, F9 Menu, F10 Quit; F11/F12 are explicitly unassigned. F2 and F9 intentionally share a built-in session action menu in this build; there is no user-script execution/configuration. F4–F8 remain unavailable in the read-only milestone and explain that when pressed, without filesystem mutations. No copy/move/delete/editor implementation was authorized or added.

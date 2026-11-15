@@ -642,6 +642,36 @@ mod tests {
         }
         use std::io::Write;
         #[test]
+        fn video_probe_accepts_slow_startup_and_remains_cancellable() {
+            let dir = tempfile::tempdir().unwrap().keep();
+            let source = dir.join("slow.mp4");
+            fs::write(&source, b"fake").unwrap();
+            let mpv = script(
+                &dir,
+                "mpv",
+                "/bin/sleep 3.2; printf ' kitty terminal output\\n'",
+            );
+            let token = AtomicU64::new(1);
+            assert!(video::Playback::prepare_with(mpv.as_os_str(), &source, &token, 1).is_ok());
+
+            // A longer startup allowance must not delay cancellation of a stuck player.
+            script(&dir, "mpv", "exec /bin/sleep 30");
+            let start = std::time::Instant::now();
+            std::thread::scope(|scope| {
+                scope.spawn(|| {
+                    std::thread::sleep(Duration::from_millis(100));
+                    token.store(2, Ordering::Relaxed);
+                });
+                let error = video::Playback::prepare_with(mpv.as_os_str(), &source, &token, 1)
+                    .err()
+                    .expect("cancelled probe");
+                assert!(error
+                    .to_string()
+                    .contains("mpv output-driver probe failed: Cancelled"));
+            });
+            assert!(start.elapsed() < Duration::from_secs(2));
+        }
+        #[test]
         fn video_handoff_disables_writes_and_handles_child_failures() {
             let dir = tempfile::tempdir().unwrap().keep();
             let source = dir.join("--input-conf=evil ; $(touch NO).mp4");
