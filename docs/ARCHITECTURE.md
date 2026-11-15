@@ -23,7 +23,7 @@ DRM/KMS sets modes and scans out buffers; does not decode video, manage input, d
 
 ## UX
 
-MC-style dual panes + optional right preview, F3 viewer, file type routing, full-screen viewer (Esc to prior pane/selection), embedded terminal eventually as PTY, settings accessible but not privileged by default.
+MC-style dual panes + optional right preview, F3 viewer, file type routing, full-screen viewer (Esc to prior pane/selection), pane-local embedded terminal via PTY (Ctrl-T), settings accessible but not privileged by default.
 
 ## Important truth-in-advertising
 
@@ -51,3 +51,11 @@ Only the main thread reads events or writes terminal output. It probes Kitty bef
 ## Confirmed file operations
 
 `mcs-core::operations` owns descriptor-relative captured plans and bounded recursive filesystem work. `mcs-tui::operations` owns destination/review/editor dialogs and one background worker. No rendering dependency enters core. See FILE_OPERATIONS.md for contracts, security boundaries and limits.
+
+## Ctrl-T pane shells
+
+`mcs-tui::shell` owns two lazy PTYs, bounded I/O channels/workers and VT screen parsers. Browser models remain unchanged while shells are visible; Ctrl-T swaps presentation without killing children. Input is routed before browser shortcuts; Ctrl-C reaches the child line discipline. Only parsed cells reach Ratatui; no raw child escapes are forwarded. See SHELL.md for lifecycle, resource budgets and limits.
+
+## Process singleton
+
+The executable acquires a nonblocking exclusive OS file lock before argument parsing or backend startup. One owner per effective user across terminals, working directories and executable paths; duplicates return silently. A fixed `/tmp/mcs-<euid>.lock` inode remains on disk; the lock lifetime is the owning file descriptor/process, with close-on-exec to avoid child inheritance. Embedded shells carry an explicit nested-launch ban. Guard failures fail closed before terminal setup. No PID scan, PID file, daemon or privilege escalation.

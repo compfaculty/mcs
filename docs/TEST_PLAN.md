@@ -56,3 +56,14 @@ The ignored `benchmark_pdf_open` experiment generates a fixed 48-line PDF, measu
 ## Confirmed file-operation gates
 
 Rust tests cover recursive copy/move/delete, symlink and broken-link preservation, no traversal during deletion, destination collisions including post-plan races, changed sources, root/parent/self-descendant rejection, FIFO rejection, bounded editor inputs, mode preservation, hardlink/symlink rejection, batch preflight, modal confirmation and save-conflict buffer retention. `scripts/check_operations_pty.py` verifies real F4–F8 execution only in a new temporary fixture, no writes before the applicable Enter/y confirmation, and terminal restoration. This explicitly permits mutation of these uniquely owned fixtures; existing user files are untouched. Linux execution, live Kitty inspection, disk-full recovery and adversarial concurrent-writer stress remain pending.
+
+## Ctrl-T pane shells
+
+Run `python3 -u scripts/check_shell_pty.py` after building. Check variables/cwd and screen survive repeated Ctrl-T, hidden commands progress, pane sessions are independent, Ctrl-C interrupts commands, resize updates `stty size`, shell exit permits restart, missing shell reports an error, F10 kills/reaps shells and restores terminal settings. Unit tests cover input control sequences, UTF-8/colors/wide-cell clipping, alternate screen, OSC non-forwarding and screen bounds. Real Kitty interactive editors and Linux/SSH remain manual acceptance.
+
+## Global single-instance startup
+
+`python3 -u scripts/check_instance_pty.py` verifies silent status-0 duplicate launches (including help/invalid options) across working directories and HOME/TMPDIR values, concurrent contenders, exactly one simultaneous-start winner, normal/crash lock release, standalone embedded-shell marker rejection, and unchanged/restored termios. Shell PTY checks execute nested MCS with and without its marker. Rust tests cover exclusivity/reuse and symlink, hardlink, directory, FIFO and insecure-permission rejection without truncation or blocking. Run PTY suites sequentially because instances now intentionally exclude each other. Linux runtime acceptance remains pending.
+
+
+The shell PTY harness verifies Ctrl-T for all toggles and that unassigned F11 neither opens nor hides the shell. No physical function-key investigation is required.

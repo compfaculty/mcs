@@ -74,3 +74,7 @@ User explicitly requested implementation, superseding the earlier M1 exclusion f
 - [ ] Linux execution and live Kitty visual acceptance; adversarial concurrent-writer and disk-full recovery checks.
 
 See FILE_OPERATIONS.md and STATUS.md for explicit limits and actual evidence. No expansion into DRM, system configuration or privileged services.
+
+## Approved Ctrl-T pane-shell increment — 2026-11-15
+
+User authorized the embedded-terminal portion of M5 independently of system panels. Ctrl-T toggles independent persistent pane sessions; PTY resize, child input/interrupt/exit and browser restoration are implemented. Read-only system panels and privileged operations remain unimplemented. Acceptance evidence is recorded in STATUS.md; Linux runtime acceptance remains pending.

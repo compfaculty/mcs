@@ -12,11 +12,13 @@ Install a stable Rust toolchain and open the root workspace in your editor, then
 cargo run --release -p mcs -- --backend tui
 ```
 
+Only one MCS instance may run per OS user across all terminals and working directories. Any duplicate launch exits silently with status 0 before touching the terminal. Launching MCS from an embedded shell is explicitly disabled. Restart an older running binary to enable this guard.
+
 Use the optimized release build for normal media viewing; the default debug build prioritizes debugging. `--backend auto` also selects TUI. `--help` prints usage without entering terminal mode. Native/DRM requests explicitly report unsupported; malformed arguments exit with usage.
 
 ## Controls
 
-The bottom menu follows commander function-key positions: **F1 Help, F2 Actions, F3 View, F4 Edit, F5 Copy, F6 Move, F7 Mkdir, F8 Delete, F9 Menu, F10 Quit**. F2 and F9 currently open the same built-in read-only action menu (sort, hidden files, filter, bookmarks, refresh and icons); no user scripts are executed. Up/Down and Enter select an action, or press its displayed letter shortcut. Esc/q closes help or the menu. Help scrolls with Up/Down. F11/F12 remain unassigned. Wide windows show dimmed reserved tiles; narrow windows prioritize working actions without renumbering them. macOS may require Fn with function keys. These keys apply in the browser; filter/bookmark/viewer modes keep their contextual controls, with F10/Ctrl-C always available to exit.
+The bottom menu follows commander function-key positions: **F1 Help, F2 Actions, F3 View, F4 Edit, F5 Copy, F6 Move, F7 Mkdir, F8 Delete, F9 Menu, F10 Quit**. F2 and F9 currently open the same built-in read-only action menu (sort, hidden files, filter, bookmarks, refresh and icons); no user scripts are executed. Up/Down and Enter select an action, or press its displayed letter shortcut. Esc/q closes help or the menu. Help scrolls with Up/Down. Ctrl-T toggles an interactive shell in the focused pane, preserving its session while hidden. F11/F12 remain unassigned. Wide windows show dimmed reserved tiles; narrow windows prioritize working actions without renumbering them. macOS may require Fn with function keys. These keys apply in the browser; filter/bookmark/viewer modes keep their contextual controls, with F10/Ctrl-C always available to exit.
 
 - Up/Down or j/k: highlight; PageUp/PageDown: move ten rows; Home/End: first/last.
 - Tab: switch independent panes. Enter: enter directory (including directory symlinks). Backspace/Left: parent.
@@ -29,6 +31,7 @@ The bottom menu follows commander function-key positions: **F1 Help, F2 Actions,
 - F4: UTF-8 editor (1 MiB); Ctrl-S reviews save, `y` confirms, Esc discards.
 - F5/F6: copy/move; F7: mkdir; F8: permanent recursive delete. Enter confirms copy/move/mkdir in a compact centered dialog; delete requires `y`. Esc cancels. No overwrite; cross-filesystem moves are rejected. See [file operations and limits](docs/FILE_OPERATIONS.md).
 - F3 or `v`: fullscreen viewer; Esc/q returns to the same browser state.
+- Ctrl-T: shell/files toggle, one persistent session per pane. In the shell: Tab completes, Ctrl-C interrupts, Ctrl-] switches pane, F10 quits. See [shell behavior and limits](docs/SHELL.md).
 - `q`, F10, or Ctrl-C in the browser: exit. While filtering, q is literal text; F10 and Ctrl-C still exit.
 
 History and bookmarks last for the session only (128 history locations per direction per pane; 32 shared bookmarks). Marks survive filtering and refresh but clear when changing directories. Filters, sort order and hidden-file settings belong to each pane and remain active across navigation.
@@ -59,6 +62,8 @@ cargo test --workspace
 cargo build -p mcs
 python3 scripts/check_tui_pty.py
 python3 scripts/check_media_pty.py
+python3 scripts/check_shell_pty.py
+python3 scripts/check_instance_pty.py
 ```
 
 The optional Python standard-library PTY check runs on macOS/Linux and checks resize, input modes, q/F10/Ctrl-C exit, restored terminal settings/cursor/screen, CLI errors, and the native stub. It has been executed on macOS only. Rust tests create uniquely owned temporary fixtures under the system temp directory and leave them there; they never delete or overwrite existing user files. The large-directory test creates 20,000 empty fixture files.

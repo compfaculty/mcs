@@ -1,3 +1,5 @@
+mod instance;
+
 use std::{env, ffi::OsString};
 
 const USAGE: &str = "Usage: mcs [--backend tui|auto|drm|native] [--help]";
@@ -33,6 +35,18 @@ fn parse_args(args: impl IntoIterator<Item = OsString>) -> Result<Command, &'sta
 }
 
 fn main() {
+    // Nested shells never launch MCS, even after the parent has gone away.
+    if env::var_os(instance::EMBEDDED_SHELL).is_some() {
+        return;
+    }
+    let _instance = match instance::acquire() {
+        Ok(Some(guard)) => guard,
+        Ok(None) => return,
+        Err(error) => {
+            eprintln!("mcs: single-instance guard: {error}");
+            std::process::exit(1);
+        }
+    };
     let command = match parse_args(env::args_os().skip(1)) {
         Ok(command) => command,
         Err(message) => {

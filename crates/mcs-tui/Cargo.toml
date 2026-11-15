@@ -14,3 +14,8 @@ ratatui-image = { version = "11.1", default-features = false, features = ["cross
 
 [target.'cfg(unix)'.dependencies]
 mio = { version = "1.2", features = ["os-poll", "os-ext"] }
+
+[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
+portable-pty = "0.9"
+vt100 = "0.16"
+nix = { version = "0.28", features = ["signal", "process", "fs"] }

@@ -520,6 +520,30 @@ impl Ui {
     }
 }
 pub fn handle_key(app: &mut App, ui: &mut Ui, key: KeyEvent) -> bool {
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    if matches!(ui.viewer.screen, Screen::Browser)
+        && ui.browser.shells.visible[app.active]
+        && !browser_operation_active(&ui.browser)
+        && ui.browser.popup.is_none()
+        && !ui.browser.bookmarks
+        && ui.browser.filter_before.is_none()
+    {
+        match key.code {
+            KeyCode::F(10) => return true,
+            KeyCode::F(11) => {}
+            _ if super::is_shell_toggle(key) => {
+                ui.browser
+                    .shells
+                    .toggle(app.active, &app.panes[app.active].path);
+                app.active_mut().refresh();
+            }
+            KeyCode::Char(']' | '5') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                app.switch()
+            }
+            _ => ui.browser.shells.key(app.active, key),
+        }
+        return false;
+    }
     if key.code == KeyCode::F(10)
         || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c'))
     {

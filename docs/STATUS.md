@@ -258,3 +258,77 @@ Executed successfully: baseline and final cargo check --workspace, cargo fmt --a
 ## 2026-11-15 — File-operation milestone commit preparation
 
 User requested committing the completed work. Reviewed pending source/documentation/dependency changes and new files, checked whitespace and common credential patterns in new files (no matches), and removed a stale README sentence that still described F4–F8 as unavailable. Commit scope includes the accumulated commander menus/icons, file operations, compact direct-confirmation dialogs, silent success behavior, regression harnesses and documentation. Latest executed Rust/build/PTY evidence is recorded above; no runtime code changed during commit preparation, so tests were not repeated. No push requested.
+
+## 2026-11-15 — User-authorized F11 persistent pane shells
+
+Implemented the requested pane terminal toggle independently of the remaining M5 system-panel work. Repository was clean at start; no commit or push performed.
+
+Changed files:
+
+- `crates/mcs-tui/src/shell.rs`: lazy per-pane interactive `$SHELL` PTYs started in the browser directory; persistent state/screen while hidden; bounded, cancellable nonblocking I/O workers; VT cell rendering, color/Unicode, resize, foreground interrupts, shell exit/restart and owned shell/foreground-group teardown with asynchronous reaping. No application unsafe code.
+- `src/lib.rs`, `src/viewer.rs`, `src/shortcuts.rs`: F11 shell/files toggle, shell input before browser commands, Ctrl-] pane switching (including Crossterm's legacy Ctrl-5 decoding), contextual hints and Shell shortcut. Existing modal input stays isolated; browser location/state retained, listing refreshed when toggled back.
+- `crates/mcs-tui/Cargo.toml`, Cargo.lock: portable-pty 0.9.0, vt100 0.16.2 and nix 0.28.0 (reuses portable-pty's version) gated to macOS/Linux. Source, MIT licenses, Unix PTY/session/descriptor behavior, parser allocation and portability reviewed; no graphics/system library or OS installation. Network-restricted dependency fetch first failed DNS, then succeeded through the approved Cargo escalation. No dependency advisory scan passed: `cargo audit --version` reports unavailable.
+- `scripts/check_shell_pty.py`: real-binary shell/session/resize/failure/restore checks in new retained temporary fixtures. README, SHELL, ARCHITECTURE, MILESTONES, SECURITY and TEST_PLAN document behavior, budgets and limitations.
+
+Executed successfully:
+
+- Initial and final `cargo check --workspace`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`. Final tests: 63 passed, two pre-existing optional Poppler experiments ignored.
+- `cargo build -p mcs` and `cargo build --release -p mcs`.
+- `MCS_TEST_BINARY=target/release/mcs python3 -u scripts/check_shell_pty.py`: variable/cwd persistence, hidden-command continuation, Ctrl-C interruption, independent pane PIDs/state, resize (`24x68` interior), shell exit/restart, unavailable-shell recovery, shell cleanup and termios/cursor/alternate-screen restoration passed.
+- `python3 -u scripts/check_tui_pty.py`: CLI, help/menu, browser/viewer/filter input, resize and q/F10/Ctrl-C restoration passed.
+- `python3 -u scripts/check_operations_pty.py`: actual F4–F8 operations, confirmations and restore passed in new private fixtures. `python3 -u scripts/check_media_pty.py`: simulated Kitty, fake Poppler/mpv and restoration passed.
+- Manual tool PTY `cargo run -p mcs -- --backend tui`: F11 shell, set/print session variable, F11 files, F11 restore, print retained variable, F10 exit. Shell comparison printed `TERMINAL_MODES_RESTORED exit=0`.
+- `git diff --check`: passed.
+
+Intermediate verification caught and fixed legacy Ctrl-] decoding. Harness assumptions about contiguous long paths, blank cells in Ratatui diffs and startup timing were corrected; final tests use short labeled outputs and wait for startup. Strict Clippy caught a single-element loop in the former reserved-F11/F12 test; fixed before final checks.
+
+Security review found vt100's std-enabled vte OSC payload buffer is unbounded. Unsupported OSC strings are now discarded incrementally before parsing, with cancellation of partial parser sequences to prevent escape splicing. A regression feeds an 8 MiB unterminated OSC across chunks without accumulating its payload. Parsed controls never reach host output; no clipboard/title/graphics passthrough. Screen size is capped at 200x500, no scrollback; each shell has eight 8 KiB output slots and 32 input slots, with per-tick output work bounded. I/O workers cancel even if detached children retain descriptors.
+
+Shell commands run as the user, with inherited environment and normal shell startup configuration. They can modify files directly without browser confirmation dialogs; no sandbox or privilege elevation is claimed. Sessions continue while hidden and last only for this MCS process. F10 kills owned shells/current foreground groups; detached background groups may survive. Mouse, graphics, terminal query replies, extended keyboard protocols and scrollback UI are not implemented. Linux/SSH execution, real Kitty visuals and interactive editor compatibility remain unverified. No performance claims or separate SAST/advisory audit. Next acceptance: restart MCS using the rebuilt release binary and exercise F11 in the user's terminal.
+
+## 2026-11-15 — Global single-instance guard and nested-launch ban
+
+User requested that MCS launches from its embedded terminal be ignored and that only one instance run globally. Implemented host-wide coordination per effective OS user, across terminals, cwd, HOME/TMPDIR and executable paths. Prior uncommitted F11 work preserved; no commit/push.
+
+Changes:
+
+- `apps/mcs/src/instance.rs`: atomic nonblocking exclusive OS file lock at fixed `/tmp/mcs-<euid>.lock`. Validate the opened descriptor's regular-file type, ownership, private permissions and single link; NOFOLLOW/nonblocking opens, no truncation, no unlink. Persistent inode avoids unlink/recreate races; lock releases on descriptor/process death and is close-on-exec. Other platforms fail explicitly before terminal initialization.
+- `apps/mcs/src/main.rs`: embedded-shell ban and instance acquisition before CLI parsing/backend startup. Existing-owner/nested calls return silently with exit 0 and no terminal I/O; unsafe/inaccessible lock state fails closed with an error.
+- `crates/mcs-tui/src/shell.rs`: set `MCS_EMBEDDED_SHELL=1` on every child shell; global locking also prevents recursion if the marker is removed.
+- `apps/mcs/Cargo.toml`, Cargo.lock: direct cfg-gated nix 0.28 dependency reuses the prior F11 version, adding user-ID access. No new resolved package/version for this increment; MIT source/license/portability reviewed. Locking uses stable std File APIs; no unsafe added.
+- `scripts/check_instance_pty.py`, `scripts/check_shell_pty.py`: duplicate/concurrency/crash/path independence, nested marker and unmarked recursion regression coverage. README, SHELL, ARCHITECTURE, SECURITY and TEST_PLAN document behavior and sequential PTY-suite execution.
+
+Executed successfully:
+
+- Baseline and final `cargo check --workspace`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`: 65 tests passed, two optional Poppler experiments ignored. New tests cover lock exclusivity/reuse and symlink/hardlink/directory/FIFO/insecure-permission rejection, preserving existing target bytes.
+- `cargo build -p mcs`; `cargo build --release -p mcs`.
+- Sequential release `scripts/check_instance_pty.py` and `scripts/check_shell_pty.py`: silent status-0 duplicates including help/invalid args, differing cwd/HOME/TMPDIR, eight concurrent contenders, exactly one winner of simultaneous starts, normal/crash release, marker ban without a parent, actual nested shell launches with/without marker, shell lifecycle and termios/cursor/screen restoration all passed.
+- `python3 -u scripts/check_tui_pty.py`: CLI, help/menus, browser/viewer/filter, resize and q/F10/Ctrl-C restoration passed.
+- Manual tool-PTY release launch: while it owned the terminal, separate debug and release executable calls both returned 0 with empty stdout/stderr. Quit restored terminal settings; shell comparison printed `TERMINAL_MODES_RESTORED exit=0`.
+- `git diff --check`: passed. An initial Python test-command quoting error was corrected before successful harness execution.
+
+Limits: applies to cooperating updated binaries for the same OS user; separate users/containers, older unguarded binaries and deliberate lock-inode removal are outside this coordination contract. Restart the currently running older MCS binary to enable protection. Lock files intentionally remain; do not remove an active lock file. Invalid lock ownership/type/permissions fail closed rather than launch unguarded. macOS verified; Linux code is cfg-gated but runtime remains unverified. Separate advisory/SAST scans and unrelated media/operation PTY suites were not rerun for this startup-only increment; prior evidence remains above. No user file operations, OS installations or privilege changes.
+
+## 2026-11-15 — Physical Fn+F11 troubleshooting and alternate toggle
+
+User reports Fn+F11 leaves MCS visible with no apparent change. Reproduced F11 only via synthetic PTY input: release shell/session tests passed; physical key delivery remains unverified. User confirmed no visible Show Desktop transition. No root cause is asserted. Apple documents Fn+F11 as a possible desktop shortcut, but this does not establish the user's event path. Requested `kitten show-key` capture in the normal Kitty shell. No macOS/Kitty settings changed.
+
+`crates/mcs-tui/src/viewer.rs` now accepts Ctrl-T as the equivalent F11 toggle in the browser and pane shell, retaining modal/filter/sidebar/viewer isolation. `src/lib.rs` help/hints document it and show shell-exit notices. `src/shell.rs` retains exit status in Info rather than silently returning after a quick shell termination; startup errors render as wrapped pane text instead of only a clipped border title. Existing Ctrl-T transposition in child shells is now reserved for MCS toggle, as documented. The session-preserving F11 path and singleton protection remain intact.
+
+`scripts/check_shell_pty.py` adds Ctrl-T opening a real `/bin/zsh` with private ZDOTDIR/HOME, verifies F11 restore/resume, and checks immediate shell exit with `/usr/bin/false`. Existing sh/nested-guard/invalid-shell checks remain. README, SHELL and TEST_PLAN explain the fallback and physical-key verification boundary.
+
+Executed: baseline and final workspace check, format-check, strict Clippy and workspace tests (65 passed; two optional Poppler experiments ignored); debug/release builds; release shell PTY checks for sh/zsh/invalid-shell; browser PTY and release singleton PTY checks, all passed. Source/diff review confirms no host escape forwarding, privileges, lock changes, new dependencies or user-configuration writes. No separate advisory/SAST scan or unrelated media/operation suite rerun for this input/presentation change. Physical Fn+F11 remains unresolved pending key capture; Ctrl-T is the verified alternative. Restart the app from a normal outer shell to load the rebuilt binary.
+
+Follow-up checks: immediate `/usr/bin/false` shell exit-status test passed. Manual release tool PTY confirmed Ctrl-T opens the shell and Ctrl-T restores files; q exited with `TERMINAL_MODES_RESTORED exit=0`. This validates the alternate binding, not physical Fn+F11 delivery.
+
+## 2026-11-15 — Ctrl-T only; F11 unassigned by user request
+
+User confirmed Ctrl-T works as expected and explicitly ended F11 troubleshooting. Ctrl-T is now the sole shell toggle. F11/F12 are again reserved/unassigned; F11 never opens/hides a pane shell. No further physical-key capture or OS/terminal configuration investigation is needed; earlier requests for such capture are withdrawn.
+
+`crates/mcs-tui/src/lib.rs` handles Ctrl-T directly, advertises it in browser/shell hints and restores reserved-key regression coverage for F11/F12. `src/viewer.rs` no longer translates Ctrl-T to F11; active shells ignore F11. `src/shortcuts.rs` restores the dimmed F11 Unused tile, and `src/shell.rs` messages name Ctrl-T only. Updated `scripts/check_shell_pty.py` to use Ctrl-T throughout and assert F11 cannot open/hide shells. README, SHELL, ARCHITECTURE, MILESTONES, SECURITY and TEST_PLAN reflect the final binding; prior STATUS entries remain historical. Session persistence and the global single-instance guard are unchanged. Existing uncommitted work preserved; no commit/push.
+
+Executed successfully: baseline/final workspace check, format-check, strict Clippy and workspace tests (65 passed; two optional Poppler experiments ignored), focused mcs-tui tests after the final footer-text change (28 passed, two ignored), debug/release builds and git diff --check. The attempted release shell PTY harness received no startup output because another instance owns the global lock; a nonblocking lock probe confirmed ACTIVE_INSTANCE_LOCK. The chained browser harness therefore did not run. Live/manual terminal-restoration reruns are deferred rather than stopping the user's active MCS instance or bypassing the guard. Prior terminal-restoration evidence remains above. No dependency, privilege, filesystem-operation or security-boundary changes; separate advisory/media/operations checks were unnecessary for this binding-only change. Restart the running instance to load the rebuilt release binary.
+
+## 2026-11-15 — Pane-shell milestone commit preparation
+
+User requested committing the accumulated Ctrl-T shell and singleton changes. Reviewed tracked diff, new-file inventory and whitespace; checked new files for common private-key/token patterns with no matches. Commit includes pane-local PTY sessions, Ctrl-T-only controls with F11/F12 reserved, safe single-instance startup, regression harnesses, dependencies and documentation. Validation evidence and active-instance PTY limitations are recorded above; no runtime code changed during commit preparation, so checks were not repeated. No push requested.

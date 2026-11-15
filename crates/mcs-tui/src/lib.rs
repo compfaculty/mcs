@@ -3,6 +3,8 @@ mod graphics;
 mod icons;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 mod operations;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod shell;
 mod shortcuts;
 mod viewer;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -20,6 +22,8 @@ use viewer::{draw, handle_key, Ui};
 struct BrowserUi {
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     operations: operations::Operations,
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    shells: shell::Shells,
     filter_before: Option<String>,
     bookmarks: bool,
     bookmark_index: usize,
@@ -51,7 +55,7 @@ const BROWSER_HELP: &[&str] = &[
     "F5 Copy, F6 Move, F7 Mkdir: Enter executes, Esc cancels.",
     "F8 Delete and editor Save: confirm with y.",
     "Marks take priority; destinations never overwrite.",
-    "F11/F12: reserved, no assigned operation.",
+    "Ctrl-T: shell/files toggle. Ctrl-]: pane from shell. F11/F12 reserved.",
     "",
     "Tab switches panes. Arrows/j/k move; PgUp/PgDn page.",
     "Home/End first/last; Enter open; Backspace/Left parent.",
@@ -92,12 +96,18 @@ pub fn run() -> io::Result<()> {
     }
     let size = terminal.size()?;
     ui.resize(size.width, size.height);
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    ui.browser.shells.resize(browser_panels(
+        Rect::new(0, 0, size.width, size.height),
+        false,
+    ));
     let mut dirty = true;
     let result = loop {
         dirty |= app.poll();
         #[cfg(any(target_os = "macos", target_os = "linux"))]
         {
             dirty |= ui.browser.operations.poll(&mut app);
+            dirty |= ui.browser.shells.poll();
         }
         dirty |= ui.poll();
         if matches!(ui.viewer.screen, viewer::Screen::Playback(_)) {
@@ -130,12 +140,22 @@ pub fn run() -> io::Result<()> {
             break Err(error);
         }
         if dirty {
+            #[cfg(any(target_os = "macos", target_os = "linux"))]
+            {
+                let size = terminal.size()?;
+                ui.browser.shells.resize(browser_panels(
+                    Rect::new(0, 0, size.width, size.height),
+                    ui.browser.bookmarks,
+                ));
+            }
             if let Err(error) = terminal.draw(|frame| draw(frame, &app, &ui)) {
                 break Err(error);
             }
             dirty = false;
         }
         let loading = app.panes.iter().any(Pane::is_loading) || ui.busy();
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        let loading = loading || ui.browser.shells.visible.iter().any(|visible| *visible);
         match event::poll(Duration::from_millis(if loading { 30 } else { 250 })) {
             Ok(true) => match event::read() {
                 Ok(Event::Key(key)) if key.kind != KeyEventKind::Release => {
@@ -146,6 +166,11 @@ pub fn run() -> io::Result<()> {
                 }
                 Ok(Event::Resize(width, height)) => {
                     ui.resize(width, height);
+                    #[cfg(any(target_os = "macos", target_os = "linux"))]
+                    ui.browser.shells.resize(browser_panels(
+                        Rect::new(0, 0, width, height),
+                        ui.browser.bookmarks,
+                    ));
                     dirty = true;
                 }
                 Ok(_) => {}
@@ -160,6 +185,10 @@ pub fn run() -> io::Result<()> {
     let cleanup = ratatui::try_restore().and(graphics_cleanup);
     restore.0 = cleanup.is_err();
     result.and(cleanup)
+}
+
+fn is_shell_toggle(key: KeyEvent) -> bool {
+    key.code == KeyCode::Char('t') && key.modifiers == KeyModifiers::CONTROL
 }
 
 // Returns true only for an explicit exit action. Editing never triggers browser commands.
@@ -271,6 +300,14 @@ fn handle_browser_key(app: &mut App, ui: &mut BrowserUi, key: KeyEvent) -> bool 
         KeyCode::F(4..=8) => ui.notice = Some(
             "Unavailable: Edit/Copy/Move/Mkdir/Delete are not implemented in this read-only build.",
         ),
+        _ if is_shell_toggle(key) => {
+            #[cfg(any(target_os = "macos", target_os = "linux"))]
+            ui.shells.toggle(app.active, &app.panes[app.active].path);
+            #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+            {
+                ui.notice = Some("Embedded shell unavailable on this platform.");
+            }
+        }
         KeyCode::F(11..=12) => ui.notice = Some("F11/F12 are reserved; no operation is assigned."),
         KeyCode::Tab => app.switch(),
         KeyCode::Up | KeyCode::Char('k') => app.active_mut().move_by(-1),
@@ -313,6 +350,26 @@ fn display_text(text: &str) -> String {
         }
     }
     result
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn browser_panels(area: Rect, bookmarks: bool) -> [Rect; 2] {
+    let sections = Layout::vertical([Constraint::Min(0), Constraint::Length(5)]).split(area);
+    let layout = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Min(3),
+        Constraint::Length(4),
+    ])
+    .split(sections[0]);
+    let body = if bookmarks {
+        Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)])
+            .split(layout[1])[1]
+    } else {
+        layout[1]
+    };
+    let panels =
+        Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(body);
+    [panels[0], panels[1]]
 }
 
 fn draw_browser(frame: &mut ratatui::Frame, app: &App, ui: &BrowserUi) {
@@ -358,22 +415,23 @@ fn draw_browser(frame: &mut ratatui::Frame, app: &App, ui: &BrowserUi) {
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(body);
-    render_pane(
-        frame,
-        &app.panes[0],
-        panels[0],
-        app.active == 0 && !ui.bookmarks,
-        ui.icons,
-    );
-    render_pane(
-        frame,
-        &app.panes[1],
-        panels[1],
-        app.active == 1 && !ui.bookmarks,
-        ui.icons,
-    );
+    for index in 0..2 {
+        let active = app.active == index && !ui.bookmarks;
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        if ui.shells.visible[index] {
+            ui.shells.draw(frame, index, panels[index], active);
+            continue;
+        }
+        render_pane(frame, &app.panes[index], panels[index], active, ui.icons);
+    }
     let pane = &app.panes[app.active];
-    let desc = if let Some(notice) = ui.notice {
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    let shell_notice = ui.shells.notice(app.active);
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    let shell_notice: Option<&str> = None;
+    let desc = if let Some(notice) = shell_notice {
+        display_text(notice)
+    } else if let Some(notice) = ui.notice {
         notice.into()
     } else if let Some(error) = &pane.error {
         format!("Error: {}", display_text(error))
@@ -399,7 +457,7 @@ fn draw_browser(frame: &mut ratatui::Frame, app: &App, ui: &BrowserUi) {
         Paragraph::new(desc).block(Block::bordered().title("Info")),
         layout[2],
     );
-    render_browser_footer(frame, pane, ui, sections[1]);
+    render_browser_footer(frame, pane, ui, sections[1], app.active);
     if let Some(popup) = &ui.popup {
         draw_browser_popup(frame, popup);
     }
@@ -458,7 +516,13 @@ fn draw_browser_popup(frame: &mut ratatui::Frame, popup: &BrowserPopup) {
     );
 }
 
-fn render_browser_footer(frame: &mut ratatui::Frame, pane: &Pane, ui: &BrowserUi, area: Rect) {
+fn render_browser_footer(
+    frame: &mut ratatui::Frame,
+    pane: &Pane,
+    ui: &BrowserUi,
+    area: Rect,
+    _active: usize,
+) {
     // Anchor the shortcut bar to the last row, including in very short terminals.
     let rows = Layout::vertical([
         Constraint::Length(area.height.saturating_sub(3)),
@@ -487,22 +551,32 @@ fn render_browser_footer(frame: &mut ratatui::Frame, pane: &Pane, ui: &BrowserUi
             }
         )
     };
-    let (hint, shortcuts): (&str, &[(&str, &str)]) = if ui.filter_before.is_some() {
-        (
-            " Type to filter | Enter apply | Esc cancel",
-            &[("Enter", "Apply"), ("Esc", "Cancel"), ("F10", "Quit")],
-        )
-    } else if ui.bookmarks {
-        (
-            " Up/Down select | Enter visit | Esc close",
-            &[("Enter", "Visit"), ("Esc", "Close"), ("F10", "Quit")],
-        )
-    } else {
-        (
-            " Tab pane | Enter open | Space mark | / filter | F9 menu | F4-F8 files",
-            &shortcuts::FUNCTION_KEYS,
-        )
-    };
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    let shell_active = ui.shells.visible[_active];
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    let shell_active = false;
+    let (hint, shortcuts): (&str, &[(&str, &str)]) =
+        if shell_active && !ui.bookmarks && ui.filter_before.is_none() {
+            (
+                " Shell: Tab completes | Ctrl-C interrupts | Ctrl-] pane | Ctrl-T files",
+                &[("Ctrl-T", "Files"), ("Ctrl-]", "Pane"), ("F10", "Quit")],
+            )
+        } else if ui.filter_before.is_some() {
+            (
+                " Type to filter | Enter apply | Esc cancel",
+                &[("Enter", "Apply"), ("Esc", "Cancel"), ("F10", "Quit")],
+            )
+        } else if ui.bookmarks {
+            (
+                " Up/Down select | Enter visit | Esc close",
+                &[("Enter", "Visit"), ("Esc", "Close"), ("F10", "Quit")],
+            )
+        } else {
+            (
+                " Tab pane | Enter open | Space mark | / filter | Ctrl-T shell | F9 menu",
+                &shortcuts::FUNCTION_KEYS,
+            )
+        };
     frame.render_widget(
         Paragraph::new(vec![
             Line::styled(status, Style::default().fg(Color::Cyan)),
@@ -899,6 +973,49 @@ mod tests {
             assert!(handle_key(&mut app, &mut ui, key(KeyCode::F(10))));
             handle_key(&mut app, &mut ui, key(KeyCode::Esc));
         }
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn shell_input_precedes_browser_shortcuts_and_preserves_browser_location() {
+        let mut app = app();
+        let mut ui = Ui::default();
+        ui.browser.shells.visible = [true, true];
+        let path = app.panes[0].path.clone();
+        for code in [
+            KeyCode::Char('q'),
+            KeyCode::Char('v'),
+            KeyCode::Tab,
+            KeyCode::F(4),
+        ] {
+            assert!(!handle_key(&mut app, &mut ui, key(code)));
+            assert_eq!(app.active, 0);
+            assert!(matches!(ui.viewer.screen, viewer::Screen::Browser));
+            assert!(!ui.browser.operations.active());
+        }
+        assert!(!handle_key(
+            &mut app,
+            &mut ui,
+            KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)
+        ));
+        handle_key(&mut app, &mut ui, key(KeyCode::F(11)));
+        assert_eq!(ui.browser.shells.visible, [true, true]);
+        // Crossterm decodes legacy Ctrl-] (0x1d) as Ctrl-5.
+        handle_key(
+            &mut app,
+            &mut ui,
+            KeyEvent::new(KeyCode::Char('5'), KeyModifiers::CONTROL),
+        );
+        assert_eq!(app.active, 1);
+        assert!(handle_key(&mut app, &mut ui, key(KeyCode::F(10))));
+        handle_key(
+            &mut app,
+            &mut ui,
+            KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL),
+        );
+        assert_eq!(ui.browser.shells.visible, [true, false]);
+        assert_eq!(app.panes[0].path, path);
+        assert_eq!(app.panes[0].selected, 0);
     }
 
     #[test]

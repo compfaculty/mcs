@@ -1,0 +1,24 @@
+# Ctrl-T pane shells
+
+Ctrl-T replaces the focused file pane with an interactive `$SHELL` (or `/bin/sh` when unset), started in that pane's directory. Ctrl-T restores the original file pane; the next Ctrl-T resumes the same shell, including variables, working directory, programs and screen contents. One independent shell is available per pane. Restoring a file pane refreshes its listing without changing its location, filter, marks or selection beyond ordinary refresh reconciliation.
+
+In a shell, Tab completes, Ctrl-C interrupts the foreground command, Ctrl-D/`exit` ends the shell, and Ctrl-] switches pane focus. F10 quits MCS. Ctrl-T and F10 are reserved by MCS and cannot be sent to child applications. Browser controls remain contextual; Ctrl-T does not dismiss dialogs, filters, bookmarks or viewers. A terminated shell returns to files with a visible exit-status notice; Ctrl-T then starts a new session in the browser directory. Sessions last only for the current MCS run. Launching MCS from an embedded shell is explicitly disabled (`MCS_EMBEDDED_SHELL`); the host-wide per-user instance lock also rejects nested calls if that marker is removed. Duplicate calls silently return status 0 before CLI parsing or terminal initialization. Hidden shells and commands keep running.
+
+This is a normal user shell, with normal shell startup files and inherited environment/permissions. Commands may modify files directly; MCS file-operation dialogs do not mediate shell commands. MCS adds no privilege elevation, command injection wrapper, automatic commands or persistent daemon. On MCS exit, owned shells and their current foreground groups are killed and shells reaped asynchronously. Unsaved child-editor changes are lost; deliberately detached/background process groups are not guaranteed to terminate.
+
+## Implementation and limits
+
+`mcs-tui::shell` owns PTYs and screen parsers; core filesystem models are unchanged. Main-thread input goes through a bounded 32-message writer queue; a full queue reports unsent input. Reader output uses eight 8 KiB chunks with backpressure; each tick processes at most eight chunks per shell. There are at most two sessions, each with reader/writer threads. Screen allocation is capped at 200 rows by 500 columns, with no scrollback. Hidden output is still drained. Nonblocking PTY I/O and cancellation stop workers even if detached children retain slave descriptors. Only the main thread renders; children never write raw escape sequences to the host terminal. Parsed cells preserve colors/styles/wide characters; controls and bidi overrides are filtered. Unsupported OSC strings are discarded incrementally before vt100/vte (whose std OSC buffer is otherwise unbounded); no payload is accumulated or forwarded.
+
+PTY resize sends the kernel window size update; parsers track the pane interior, including hidden sessions. Basic VT applications, keyboard input, application cursor keys and alternate-screen output are supported. Mouse forwarding, terminal query replies, inline graphics, extended keyboard protocols and scrollback UI are not implemented. This is not a complete xterm emulator. Linux capability is cfg-gated with macOS; Linux/SSH runtime acceptance remains pending. Other platforms retain the browser and report embedded shells unavailable.
+
+## Dependency review
+
+Cargo.lock pins portable-pty 0.9.0 (MIT, WezTerm), vt100 0.16.2 (MIT, doy/vt100-rust) and nix 0.28.0 (MIT, nix-rust). portable-pty provides mature PTY allocation/spawning/resize rather than local unsafe FFI; vt100 uses vte for parsing. nix supplies safe owned-process signal calls; the version reuses portable-pty's dependency. Source manifests, Unix spawn/session/descriptor handling, signal implementations and parser APIs were reviewed locally. These crates support macOS/Linux without Linux graphics libraries. No application `unsafe` was added. Additional transitive packages are recorded in Cargo.lock; this review is not an advisory/security audit.
+
+## Verification
+
+`cargo test --workspace` covers key encoding and parsed/clipped rendering, clipboard escape non-forwarding, colors/Unicode, alternate screen and dimension bounds alongside existing browser tests. After building MCS, run `python3 -u scripts/check_shell_pty.py` for real shell execution, Ctrl-T persistence, hidden command progress, independent panes, Ctrl-C, PTY resize, shell restart, unavailable-shell recovery, cleanup and termios/cursor/alternate-screen restoration. It uses a new retained temporary fixture and `/bin/sh` with controlled startup environment; it does not execute user-supplied commands or modify existing user files.
+
+
+Ctrl-T is the sole shell toggle. F11/F12 are unassigned MCS keys; F11 does not toggle the shell. Startup failures appear as wrapped text inside the pane; quick shell exits leave their status in Info.

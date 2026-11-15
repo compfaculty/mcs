@@ -31,3 +31,11 @@ The opening-performance update enables image-rs PNM only for the bounded binary-
 ## Confirmed file operations
 
 The user-authorized F4–F8 milestone supersedes earlier read-only runtime descriptions for these explicit actions. Every mutation requires explicit confirmation (Enter on the labeled Copy/Move/Mkdir dialog; y for Delete/Save); descriptor-relative operations, NOFOLLOW, exclusive creation, no-replace rename and source rechecks protect ordinary failure paths. Residual concurrent-writer races and metadata limitations are documented in FILE_OPERATIONS.md. No runtime shell or privilege elevation is used.
+
+## User-authorized Ctrl-T shell
+
+The Ctrl-T increment explicitly enables normal interactive commands with inherited user permissions and shell startup configuration. Shell commands can mutate files without browser confirmation dialogs; MCS is not a command sandbox. Typed spawn/cwd APIs avoid shell interpolation. Output is parsed into bounded cells, never forwarded as raw controls; OSC clipboard escapes are not executed. PTY queues/screens and per-tick work are bounded. Exit kills owned shells/current foreground groups and reaps shells; detached background groups may survive. See SHELL.md for exact controls, dependencies and limits. Earlier no-runtime-shell descriptions apply to browser/file-operation paths only.
+
+## Single-instance guard
+
+Launches are serialized per effective UID using an atomic, nonblocking OS lock on fixed `/tmp/mcs-<euid>.lock`, independent of caller-controlled HOME/TMPDIR/cwd. The lock file is created with 0600, never truncated/unlinked, opened NOFOLLOW/nonblocking and validated on the opened descriptor (regular file, owner, one link, private permissions). Invalid/inaccessible state fails closed. CLOEXEC prevents shell/helper inheritance. Process death releases the lock; stale files do not represent live instances. The embedded-shell marker blocks nested calls as well; removing it does not bypass the lock. This coordinates cooperating MCS binaries for the same user, not separate users, containers, old unguarded binaries or deliberate lock-file removal. No new resolved dependency version or unsafe application code.
