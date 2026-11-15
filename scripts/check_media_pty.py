@@ -80,7 +80,7 @@ exit 0''')
         changed = wait_for(master, b'a=T,U=1')
         assert b'd=I,i=' + image_id in changed, 'Old image was not deleted on replacement'
         os.write(master, b'q')
-        closed = wait_for(master, b'q/F10/Ctrl-C')
+        closed = wait_for(master, b'F4-F8 files')
         assert b'd=I,i=' in closed and b'd=A' not in closed, 'Owned placement cleanup missing'
         print('PASS simulated Kitty image encode, zoom, owned-ID cleanup and browser return', flush=True)
         open_file('paper.pdf')
@@ -93,17 +93,17 @@ exit 0''')
         os.kill(process.pid, signal.SIGWINCH)
         wait_for(master, b'a=T,U=1')
         os.write(master, b'q')
-        wait_for(master, b'q/F10/Ctrl-C')
+        wait_for(master, b'F4-F8 files')
         print('PASS fake Poppler page render/search, resize and cleanup', flush=True)
         open_file('play.mp4')
         played = wait_for(master, b'FAKE_MPV_OWNS_TTY')
-        if b'q/F10/Ctrl-C' not in played:
-            wait_for(master, b'q/F10/Ctrl-C')
+        if b'F4-F8 files' not in played:
+            wait_for(master, b'F4-F8 files')
         assert b'\x1b[?1049l' in played, 'MCS did not suspend alternate screen'
         open_file('fail.mp4')
         wait_for(master, b'failed')
         os.write(master, b'q')
-        wait_for(master, b'q/F10/Ctrl-C')
+        wait_for(master, b'F4-F8 files')
         os.write(master, b'q')
         assert process.wait(timeout=5) == 0
         output = drain(master)

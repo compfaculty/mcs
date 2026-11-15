@@ -531,6 +531,8 @@ pub fn handle_key(app: &mut App, ui: &mut Ui, key: KeyEvent) -> bool {
     }
     if ui.browser.filter_before.is_none()
         && !ui.browser.bookmarks
+        && ui.browser.popup.is_none()
+        && !browser_operation_active(&ui.browser)
         && matches!(key.code, KeyCode::F(3) | KeyCode::Char('v'))
     {
         if let Some(entry) = app.panes[app.active].current() {
@@ -545,6 +547,18 @@ pub fn draw(frame: &mut ratatui::Frame, app: &App, ui: &Ui) {
         super::draw_browser(frame, app, &ui.browser);
     } else {
         ui.viewer.draw(frame);
+    }
+}
+
+fn browser_operation_active(ui: &super::BrowserUi) -> bool {
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    {
+        ui.operations.active()
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        let _ = ui;
+        false
     }
 }
 

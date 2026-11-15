@@ -46,3 +46,8 @@ Resource limits: 100,000 entries/scan, two workers/application, 128 back and for
 F3/v switches an explicit screen enum between Browser, Loading, Text, Media, Playback and Error; browser state remains owned by the unchanged core. Search input and view preferences belong to the viewer. One persistent text/routing worker and one lazily created graphics worker use bounded channels and generation IDs. Superseded/closed requests cannot apply stale results. Indexing runs in bounded idle steps; search and helper operations check cancellation between chunks/polls. Ordinary filesystem reads remain non-interruptible.
 
 Only the main thread reads events or writes terminal output. It probes Kitty before event processing, draws pre-encoded images, deletes owned image IDs, and coordinates fullscreen playback suspend/resume. mpv alone owns the terminal during playback. No default GUI fallback, native renderer or OS installation is introduced. See VIEWER.md for exact limits, controls, dependencies and acceptance boundaries.
+
+
+## Confirmed file operations
+
+`mcs-core::operations` owns descriptor-relative captured plans and bounded recursive filesystem work. `mcs-tui::operations` owns destination/review/editor dialogs and one background worker. No rendering dependency enters core. See FILE_OPERATIONS.md for contracts, security boundaries and limits.

@@ -51,3 +51,8 @@ Large terminal pixel areas must uniformly downsample the encoded raster rather t
 ### Opening-performance experiments
 
 The ignored `benchmark_pdf_open` experiment generates a fixed 48-line PDF, measures three sequential samples per profile (metadata, Poppler transfer/decode, crop/resize, Kitty encoding and Ratatui buffer preparation), and reports encoded bytes. Run debug and release separately without competing builds. It excludes actual terminal writes/compositing; do not interpret it as real-file open latency or a universal speedup. The ignored `pdf_ppm_matches_png_pixels` check compares actual Poppler P6 and PNG pixel buffers at equal raster size. Default tests additionally check no software upscaling, public PNM rejection, and explicit compression acknowledgement/fallback; the simulated media PTY checks compressed rendering and cleanup.
+
+
+## Confirmed file-operation gates
+
+Rust tests cover recursive copy/move/delete, symlink and broken-link preservation, no traversal during deletion, destination collisions including post-plan races, changed sources, root/parent/self-descendant rejection, FIFO rejection, bounded editor inputs, mode preservation, hardlink/symlink rejection, batch preflight, modal confirmation and save-conflict buffer retention. `scripts/check_operations_pty.py` verifies real F4–F8 execution only in a new temporary fixture, no writes before the applicable Enter/y confirmation, and terminal restoration. This explicitly permits mutation of these uniquely owned fixtures; existing user files are untouched. Linux execution, live Kitty inspection, disk-full recovery and adversarial concurrent-writer stress remain pending.

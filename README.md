@@ -1,6 +1,6 @@
 # MCS — Multimedia Console System
 
-**Status:** macOS read-only browser plus F3 text/image/PDF viewer and optional terminal mpv handoff. Rust and simulated PTY checks are available; real Kitty media and performance acceptance remain pending. Linux/SSH work is deferred. No native DRM backend exists.
+**Status:** macOS browser with confirmed F4–F8 file operations plus F3 text/image/PDF viewer and optional terminal mpv handoff. Rust and simulated PTY checks are available; real Kitty media and performance acceptance remain pending. Linux/SSH work is deferred. No native DRM backend exists.
 
 MCS is an opt-in console-first Rust application. Run `mcs` from a normal shell, use an MC-inspired two-pane file browser, then exit back to the same shell. The text frontend needs no desktop environment or Linux graphics libraries.
 
@@ -16,13 +16,18 @@ Use the optimized release build for normal media viewing; the default debug buil
 
 ## Controls
 
+The bottom menu follows commander function-key positions: **F1 Help, F2 Actions, F3 View, F4 Edit, F5 Copy, F6 Move, F7 Mkdir, F8 Delete, F9 Menu, F10 Quit**. F2 and F9 currently open the same built-in read-only action menu (sort, hidden files, filter, bookmarks, refresh and icons); no user scripts are executed. Up/Down and Enter select an action, or press its displayed letter shortcut. Esc/q closes help or the menu. Help scrolls with Up/Down. F11/F12 remain unassigned. Wide windows show dimmed reserved tiles; narrow windows prioritize working actions without renumbering them. macOS may require Fn with function keys. These keys apply in the browser; filter/bookmark/viewer modes keep their contextual controls, with F10/Ctrl-C always available to exit.
+
 - Up/Down or j/k: highlight; PageUp/PageDown: move ten rows; Home/End: first/last.
 - Tab: switch independent panes. Enter: enter directory (including directory symlinks). Backspace/Left: parent.
 - `[` / `]`: back/forward history, restoring highlighted paths. `r`: refresh.
-- Space/Insert: mark/unmark and advance. Marks are informational; no file operations exist.
+- Space/Insert: mark/unmark and advance. F5/F6/F8 use marks, falling back to the highlighted entry.
 - `s`: name ascending/descending, always directories first. `.`: show/hide dotfiles (hidden initially).
+- `i`: toggle icons beside filenames and in the bottom shortcut tiles. Emoji default on for UTF-8 terminal locales, except Linux virtual consoles and dumb/unknown terminals. Set `MCS_ICONS=always` or `MCS_ICONS=never` to override startup detection. No special icon font or graphics protocol is required; font coverage and emoji width vary by terminal. ASCII file markers and text menu labels remain available. Categories are filename hints, not a guarantee that the viewer supports that format.
 - `/`: edit a case-insensitive substring filter; Enter accepts; Esc cancels editing. Esc outside editing clears the filter. Filter text is limited to 256 characters.
 - `B`: add/remove the current directory bookmark. `b`: bookmark sidebar; Up/Down selects, Enter visits, Esc closes.
+- F4: UTF-8 editor (1 MiB); Ctrl-S reviews save, `y` confirms, Esc discards.
+- F5/F6: copy/move; F7: mkdir; F8: permanent recursive delete. Enter confirms copy/move/mkdir in a compact centered dialog; delete requires `y`. Esc cancels. No overwrite; cross-filesystem moves are rejected. See [file operations and limits](docs/FILE_OPERATIONS.md).
 - F3 or `v`: fullscreen viewer; Esc/q returns to the same browser state.
 - `q`, F10, or Ctrl-C in the browser: exit. While filtering, q is literal text; F10 and Ctrl-C still exit.
 
@@ -42,7 +47,7 @@ Kitty images/PDF: `+`/`-` zoom, `0` fit, arrows pan; PgUp/PgDn change PDF pages.
 
 Video hands the terminal to mpv: Space pause, arrows seek/volume, m mute, Esc/q return. F10/Ctrl-C exits MCS. Native decoding/player libraries are not implemented from scratch. Live media acceptance and 720p/30 measurements are pending.
 
-See [viewer controls, limits and dependency review](docs/VIEWER.md). No editing, copy/move/delete, external GUI fallback or native graphics was added.
+See [viewer controls, limits and dependency review](docs/VIEWER.md). File mutations use separate confirmation dialogs. No external GUI fallback or native graphics is implemented.
 
 ## Verification
 

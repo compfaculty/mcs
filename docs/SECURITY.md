@@ -26,3 +26,8 @@ Only generated private playback configuration is written/removed; browsed source
 
 
 The opening-performance update enables image-rs PNM only for the bounded binary-RGB output of Poppler. Public image decode still rejects formats other than PNG/JPEG; internal transfer applies the same dimension/decoded-byte limits and helper-output caps. Kitty zlib transport is used only after its own positive capability acknowledgement; unconfirmed terminals keep raw transport. No size/time/authorization check was relaxed for performance. Pixel-equivalence with the prior Poppler PNG path is an explicit local check, not a general proof for every document.
+
+
+## Confirmed file operations
+
+The user-authorized F4–F8 milestone supersedes earlier read-only runtime descriptions for these explicit actions. Every mutation requires explicit confirmation (Enter on the labeled Copy/Move/Mkdir dialog; y for Delete/Save); descriptor-relative operations, NOFOLLOW, exclusive creation, no-replace rename and source rechecks protect ordinary failure paths. Residual concurrent-writer races and metadata limitations are documented in FILE_OPERATIONS.md. No runtime shell or privilege elevation is used.

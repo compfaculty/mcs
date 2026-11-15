@@ -1,4 +1,6 @@
-//! Platform-independent, read-only browser state. Filesystem scans never run on the UI thread.
+//! Browser state. Filesystem scans never run on the UI thread.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub mod operations;
 use std::{
     collections::BTreeSet,
     fs, io,
@@ -125,6 +127,16 @@ impl Pane {
     }
     pub fn marked_count(&self) -> usize {
         self.marked.len()
+    }
+    /// Marks include entries hidden by the current filter. Otherwise use the highlight.
+    pub fn operation_paths(&self) -> Vec<PathBuf> {
+        if self.marked.is_empty() {
+            self.current()
+                .map(|entry| vec![entry.path.clone()])
+                .unwrap_or_default()
+        } else {
+            self.marked.iter().cloned().collect()
+        }
     }
     pub fn is_marked(&self, entry: &Entry) -> bool {
         self.marked.contains(&entry.path)

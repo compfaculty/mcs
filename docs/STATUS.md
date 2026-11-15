@@ -1,5 +1,54 @@
 # Status / handoff
 
+## 2026-11-15 — Commander function-key positions
+
+User requested conventional function-key operations rather than custom menu-letter positions. Checked the upstream Midnight Commander manual/keymap (https://source.midnight-commander.org/man/mc.html and https://github.com/MidnightCommander/mc/blob/master/misc/mc.default.keymap). Browser tiles now use F1 Help, F2 Actions, F3 View, F4 Edit, F5 Copy, F6 Move, F7 Mkdir, F8 Delete, F9 Menu, F10 Quit; F11/F12 are explicitly unassigned. F2 and F9 intentionally share a built-in session action menu in this build; there is no user-script execution/configuration. F4–F8 remain unavailable in the read-only milestone and explain that when pressed, without filesystem mutations. No copy/move/delete/editor implementation was authorized or added.
+
+Files changed for this increment:
+
+- `crates/mcs-tui/src/lib.rs`: scrollable F1 help, F2/F9 action menu using existing sort/hidden/filter/bookmark/refresh/icon commands, modal navigation/dismissal, static unavailable notices, function-key footer and regression tests. Existing aliases and both icon features are preserved.
+- `crates/mcs-tui/src/shortcuts.rs`: ordered F1–F12 slots; dim disabled operations. Widths below 120 columns prioritize working actions; 120–143 show F1–F10; 144+ show all twelve without reassigning key numbers. Contextual filter/bookmark controls remain unchanged. Removed obsolete glyph/active-state logic for the former custom shortcut bar; status still reports sort/hidden/marks/filter values.
+- `crates/mcs-tui/src/viewer.rs`: prevent F3/v interception while help/menu owns input.
+- `scripts/check_tui_pty.py`: exercise F1 help/close, F2/F9 menu/close and F5 unavailable notice before existing navigation/viewer/restore checks. README documents exact mappings, unavailable/reserved keys, menu scope and macOS Fn usage.
+
+Executed successfully: workspace check, format check, strict Clippy and workspace tests (50 passed, two optional media experiments ignored); debug/release builds; `MCS_ICONS=always python3 -u scripts/check_tui_pty.py` (all cases passed, including q/F10/Ctrl-C restoration); `git diff --check`. Final rendering cleanup also passed check/fmt/Clippy, focused TUI tests and both builds. A release tool-PTY smoke run exercised F5 notice, F1 help/close, F9 menu and its hidden-file action, then quit: `TERMINAL_MODES_RESTORED exit=0` from a shell stty comparison.
+
+Tests cover ordered/reserved/dimmed slots, responsive/icon/text rendering, menu selection/direct shortcuts, bounded help scrolling, q dismissing help, filter isolation, F10 from overlays, preventing viewer/pane actions through overlays, and unchanged browser state after unavailable operations. Intermediate compile issues from removing the old renderer argument were fixed; the first PTY assertion expected contiguous "Unavailable", which Ratatui splits around matching cells. It now checks the emitted explanatory fragment; unit tests verify notice/state behavior.
+
+Security review: menus dispatch a fixed list of existing read-only commands; no shell/scripts, file writes, privilege or dependency changes. Static notices/help do not introduce untrusted display content. Separate scanners/media/hardware checks were not needed for this input/UI increment. No real Kitty visual acceptance claimed. Release rebuilt; restart MCS to use the new bindings. No commit/push performed; previous UI/icon changes retained.
+
+## 2026-11-15 — Modern icon shortcut menu
+
+User clarified that icons were intended for the bottom menu and explicitly requested retaining the filename icons. Replaced the continuous cyan MC-style strip with separated rounded shortcut tiles, centered action icons/labels, key hints in the top border, cyan primary actions, red Quit and yellow active sort/hidden/filter/mark indicators. Status uses a restrained cyan-on-black line. Existing file icons and input bindings are preserved; `i` now toggles file and menu icons together.
+
+- `crates/mcs-tui/src/shortcuts.rs`: presentation-only responsive tile renderer and fixed trusted glyph mapping; standard terminal colors, no graphics/font dependency. At 80 columns all eight icons fit; narrow windows prioritize a subset and drop decoration before action labels. Short windows retain a flat textual key/action fallback.
+- `crates/mcs-tui/src/lib.rs`: five-row footer (two status/hint rows plus three tile rows), contextual filter/bookmark tiles, explicit active-state styling and updated buffer assertions. The footer costs two more rows than the previous strip; browser/viewer state and file behavior are unchanged.
+- README: documents the shared icon toggle. Added tests for all eight menu icons at 80/100/160 columns, key visibility, text fallback and active-state colors. Existing tiny-height/width, input isolation, sanitization, filename/mark alignment and modal tests remain passing. The earlier footer geometry/color assertions were updated for the requested redesign.
+
+Executed successfully: `cargo check --workspace`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace` (48 passed; two optional media experiments ignored), debug/release builds, `MCS_ICONS=always python3 -u scripts/check_tui_pty.py` (q/F10/Ctrl-C, resize, text viewer return and termios/cursor/screen restoration), and `git diff --check`. A release tool-PTY run exercised active hidden/sort indicators, filtering/cancel, bookmark sidebar/close and icon toggle; exited 0 with shell `TERMINAL_MODES_RESTORED exit=0`. An intermediate caption variable-shadowing compile error was fixed before final checks.
+
+Security review: only rendering and static glyphs changed; filename sanitization, modal input boundaries, read-only behavior and resource limits remain intact. No dependencies or privilege changes; separate security scanners/media benchmarks were not warranted. Actual Kitty appearance remains for user visual acceptance; no screenshot comparison claimed. Release binary rebuilt; restart to inspect. No commit or push performed.
+
+## 2026-11-15 — Filename category icons
+
+User requested emoji/category icons. Added `crates/mcs-tui/src/icons.rs` with decorative folder/link/image/video/audio/PDF/archive/code/config/text/generic-file glyphs, using existing entry metadata and filename extensions only. Links (including broken links) retain their own identity; directories take precedence over filename extensions. These categories do not imply viewer-format support.
+
+`crates/mcs-tui/src/lib.rs` reserves a two-cell icon column while preserving marks, filename escaping, selection and modal input. `i` toggles icons for both panes for the session; the header advertises it. Startup enables icons for UTF-8 locales on ordinary terminals and defaults to ASCII on Linux virtual consoles, dumb/unknown terminals and non-UTF-8 locales. `MCS_ICONS=always|never` overrides startup selection; `i` remains available. README documents behavior and font limitations. No graphics protocol, Nerd Font, new dependencies or additional filesystem reads are required.
+
+Verification executed: workspace check/fmt/strict Clippy; workspace tests (47 passed, two optional media experiments ignored); debug/release builds; `MCS_ICONS=always python3 -u scripts/check_tui_pty.py` (all q/F10/Ctrl-C, resize, viewer return and restoration checks passed). New tests cover category precedence, mixed-case/unknown extensions, ASCII defaults/overrides, fixed filename columns and marks in both modes, tiny rendering and toggle isolation from filter/sidebar input. Initial format and Clippy len-zero findings in test code were corrected; final format/Clippy and focused TUI tests passed. Release tool-PTY run exercised icons off/on and pane switching; exit 0 with `TERMINAL_MODES_RESTORED exit=0`. `git diff --check` passed.
+
+Security review: icons are fixed trusted strings; untrusted filenames still pass through display sanitization, and file actions/permissions are unchanged. No parsing, subprocess or dependency boundaries changed; separate scanners and media checks were not run for this presentation change. Emoji font coverage/width cannot be reliably auto-probed; actual Kitty glyph appearance remains for user visual acceptance. Restart the rebuilt release binary to inspect it, and use `i` if the font disagrees. No commit/push performed; prior footer edits preserved.
+
+## 2026-11-15 — Classic browser footer
+
+User requested a Midnight Commander style bottom panel. `crates/mcs-tui/src/lib.rs` now renders a blue status strip, concise navigation hints and an edge-to-edge cyan shortcut bar with contrasting key badges. The footer uses three rows instead of four, giving the file panes one extra row. Existing bindings remain unchanged; only working actions are advertised. Filter and bookmark modes show their own controls. Narrow windows reduce the shortcut set, preserving F10 Quit at widths of at least eight cells; very short windows retain the bottom bar.
+
+Updated buffer tests cover standard sizes, widths 8–160, heights 1–5, key/label colors, contextual controls and escaped control/bidi filter text. An initial new test exposed footer loss at tiny heights; reserving the footer before laying out the browser fixed it.
+
+Executed successfully: `cargo check --workspace`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace` (44 passed, two optional media experiments ignored), debug and release builds. `python3 -u scripts/check_tui_pty.py` passed resize, viewer return, filter/sidebar and q/F10/Ctrl-C terminal-mode/cursor/screen restoration. A release tool-PTY run exercised pane switching and filter/cancel, then exited with `TERMINAL_MODES_RESTORED exit=0` from a shell stty comparison. Final hint wording was shortened to fit 80 columns; Rust gates and both builds were rerun.
+
+Security review: rendering-only changes retain display sanitization and input-mode isolation; no dependency, filesystem-operation, subprocess or privilege changes. Separate security scanners and media/hardware acceptance were not needed for this footer-only change. No real Kitty screenshot comparison was performed; next step is restarting MCS in the user's terminal to inspect the new footer. No commit or push performed.
+
 2026-11-14: Initial scaffold authored. Rust toolchain was not available in packaging environment, therefore **no compile or run verification has been performed**. M0 source exists, M0 acceptance pending. The native DRM backend is a deliberate unsupported stub. No image/PDF/video playback exists yet.
 
 First agent action: run checks described in `prompts/01-start.md`, fix concrete incompatibilities, record exact results here. Do not state M0 complete before execution in a real terminal.
@@ -158,3 +207,54 @@ Commands executed:
 Security/resource review: raw helper output is larger than PNG, but remains within the existing 64 MiB pipe limit, parser dimensions/decoded-byte bounds and 10-second timeout. Public PNM input is rejected. No input validation, cancellation, source-file safety, authorization or memory limit was removed. No OS packages installed, no user document inspected, no commit/push performed. Advisory scanning remains unavailable as previously recorded.
 
 Final release tool-terminal smoke run exited 0 with `TERMINAL_MODES_RESTORED exit=0` from shell stty comparison. No real Kitty display-latency or private-document benchmark was performed.
+
+## 2026-11-15 — User-authorized F4–F8 file operations
+
+Implemented the explicitly requested file operations over the existing uncommitted icons/help/menu work, preserving that work. No commit or push performed.
+
+Changed files for this milestone:
+
+- `crates/mcs-core/src/operations.rs`: captured descriptor-relative plans; exclusive recursive copy, atomic no-replace move, mkdir, recursive deletion, bounded UTF-8 editor with staged saves and source revalidation. Core state exposes marked paths with selection fallback in `src/lib.rs`.
+- `crates/mcs-core/Cargo.toml` and Cargo.lock: direct macOS/Linux rustix 1.1.6 fs dependency, reusing the existing locked version. Cached source/manifest/platform implementation reviewed (Bytecode Alliance, MIT/Apache alternatives, Rust 1.65 minimum); no newly resolved package version.
+- `crates/mcs-tui/src/operations.rs`: one asynchronous worker, modal destination/review/editor/result screens, explicit y confirmation, failed-save buffer retention, pane refresh. Browser lib/viewer input and shortcut tiles integrate F4–F8 while retaining F11/F12 reservations and narrow-terminal Quit visibility.
+- `scripts/check_operations_pty.py`: real-binary F4–F8 mutations confined to a new private temporary fixture; verifies no changes before y. Existing TUI/media harness assertions updated for the active operations/header.
+- README, FILE_OPERATIONS, architecture, security, test-plan and milestone docs record controls, boundaries and limitations. Existing unrelated changes in icons and prior status entries were preserved.
+
+Executed checks:
+
+- Initial workspace check briefly reported a shortcut-draw argument mismatch while the pre-existing uncommitted UI files were changing; a fresh baseline check/fmt/strict Clippy/test then passed before operation implementation.
+- Final `cargo check --workspace`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`: passed; 57 tests passed, two pre-existing optional Poppler experiments ignored.
+- `cargo build -p mcs`: passed.
+- `python3 -u scripts/check_operations_pty.py`: passed F4 edit/save, F5 copy, F6 move, F7 mkdir, F8 permanent deletion, no writes before confirmation, termios/cursor/alternate-screen restoration. Generated fixture retained for inspection; no existing user file was mutated by verification.
+- `python3 -u scripts/check_tui_pty.py`: passed CLI, help/menus, cancelled copy prompt, viewer/search, resize and q/F10/Ctrl-C restoration.
+- `python3 -u scripts/check_media_pty.py`: passed simulated Kitty, fake Poppler and fake mpv lifecycle/restoration checks.
+- Manual tool PTY `cargo run -p mcs -- --backend tui`: opened F7, cancelled without writing, quit; shell stty comparison printed `TERMINAL_MODES_RESTORED exit=0`.
+- `git diff --check`: passed. Reviewed mutation boundaries, dependency lock diff and modal input isolation. `cargo audit --version` confirms cargo-audit remains unavailable; no advisory scan or separate SAST run is claimed.
+
+Intermediate fixes: moved a helper before the test module for strict Clippy; changed a sandbox-denied Unix socket fixture to a newly owned FIFO; fixed tiny-terminal shortcut clipping. The operation PTY harness initially sent y while plan preparation was still pending (correctly ignored); it now waits for the actual confirmation dialog. The media harness still expected an old browser header; assertions updated to the current header and the complete suite rerun successfully.
+
+Security and limitations: each write requires y after review; child symlinks are never followed in recursive work, regular-file opens use NOFOLLOW/nonblocking plus fstat, destinations are exclusive, and source metadata changes invalidate plans. Tests cover ordinary changed-source and destination races, symlinks/broken links, special files, self-descendant/root/parent rejection and modal save recovery. These checks are not a snapshot or hostile-writer sandbox; check-to-unlink/rename races remain documented. Copy/delete have entry/depth limits and copy a 16 GiB limit; batches/failed copies can leave partial output. Delete has no undo; moves across filesystems are rejected. Editor supports regular UTF-8 files up to 1 MiB, rejects symlinks/multiple hardlinks, and saves by replacing the file; ACLs/xattrs and other extended metadata are not preserved. Exit during ongoing I/O can leave partial output. Linux, live Kitty visuals, disk-full recovery and adversarial writer stress remain unverified. See FILE_OPERATIONS.md for exact contracts. Next acceptance is restarting MCS and inspecting these dialogs in the user's Kitty session.
+
+Final delivery rebuild: `cargo build -p mcs` and `cargo build --release -p mcs` both passed after the final cleanup/error-reporting review. `MCS_TEST_BINARY=target/release/mcs python3 -u scripts/check_operations_pty.py` also passed all F4–F8 mutations, confirmation and terminal-restoration checks. Final workspace check/format/Clippy/tests and diff whitespace checks passed. Restart with `cargo run --release -p mcs -- --backend tui` to load these changes.
+
+## 2026-11-15 — Compact operation dialogs and direct F6 confirmation
+
+User reported F6 appearing ineffective after Enter and provided a screenshot of the oversized destination modal. Root cause of the interaction confusion: Enter only prepared a second review, then y was required to execute. Replaced this flow for Copy/Move/Mkdir: the destination dialog shows source/name or marked count, source directory, destination and explicit `[ Enter: Move/Copy/Mkdir ] [ Esc: Cancel ]` hints. Enter now runs path validation and executes the displayed action in the existing worker; no hidden second confirmation. Delete and editor Save still require y. No overwrite/path-safety protections changed.
+
+`crates/mcs-tui/src/operations.rs`: destination, confirmation, working and result modals are content-sized (up to 80 columns) and centered, retaining the browser background. The editor keeps its large viewport. Added F6-to-other-pane execution/collision regression tests, Esc/no-write checks, centered-buffer/background assertions and tiny-terminal coverage. `src/lib.rs` help, README, FILE_OPERATIONS, SECURITY and TEST_PLAN updated to describe the exact confirmation keys. `scripts/check_operations_pty.py` now verifies destination typing causes no writes and Enter directly executes copy/move/mkdir; save/delete remain y-confirmed. Existing uncommitted work preserved.
+
+Executed successfully: cargo check --workspace; cargo fmt --all -- --check; cargo clippy --workspace --all-targets -- -D warnings; cargo test --workspace (59 passed, two optional Poppler experiments ignored); cargo build -p mcs; cargo build --release -p mcs; MCS_TEST_BINARY=target/release/mcs python3 -u scripts/check_operations_pty.py; python3 -u scripts/check_tui_pty.py; git diff --check. Real-binary tests verified F4–F8, explicit confirmation/no-write-before-confirmation, q/F10/Ctrl-C and terminal restoration. Filesystem tests affected only newly owned fixtures, not user Documents. Intermediate compile/Clippy errors from moving the area calculation and using a manual clamp were fixed before final checks.
+
+Security review: confirmation remains explicit, with visible source/destination/action; unchanged core preflight, metadata rechecks, exclusive creation and atomic no-replace moves continue to pass regression tests. No dependency or privilege changes. Separate advisory/SAST scanners and media suites were not needed for this isolated dialog/input change; live Kitty visual acceptance and previously documented filesystem-race/partial-output limits remain unchanged. Restart the running app to load the rebuilt release binary.
+
+Manual final release tool-PTY check: opened the centered F6 dialog, verified the visible `[ Enter: Move ] [ Esc: Cancel ]` hints, cancelled without mutation and quit. Shell comparison printed `TERMINAL_MODES_RESTORED exit=0`. This is a tool-terminal check, not real Kitty screenshot acceptance.
+
+## 2026-11-15 — Silent success for file operations
+
+Removed the success acknowledgement modal at the user's request. `crates/mcs-tui/src/operations.rs` now refreshes both panes and clears the operation dialog immediately on success, including copy/move/mkdir/delete and editor save. Errors still remain visible, failed saves keep their buffers, and pre-action confirmations/path-safety behavior are unchanged. Updated existing state tests to assert inactive dialogs after success and retained collision/save-failure checks. `scripts/check_operations_pty.py` now chains real F4–F8 actions without extra result-dismissal keys and quits with q immediately after deletion, proving browser input is restored. FILE_OPERATIONS.md documents this behavior. Existing uncommitted work preserved; no commit/push.
+
+Executed successfully: baseline and final cargo check --workspace, cargo fmt --all -- --check, cargo clippy --workspace --all-targets -- -D warnings, cargo test --workspace (59 passed; two optional Poppler experiments ignored); cargo build -p mcs; cargo build --release -p mcs; MCS_TEST_BINARY=target/release/mcs python3 -u scripts/check_operations_pty.py; git diff --check. PTY checks verified no post-success acknowledgement, actual filesystem results in a newly owned fixture, and termios/cursor/alternate-screen restoration. No user files were mutated by verification. The existing failure-path tests still pass. No dependencies, mutation permissions or core filesystem code changed; separate media/security scanners were not warranted for this small success-presentation change. Live Kitty appearance remains unverified; restart the app to use the rebuilt release binary.
+
+## 2026-11-15 — File-operation milestone commit preparation
+
+User requested committing the completed work. Reviewed pending source/documentation/dependency changes and new files, checked whitespace and common credential patterns in new files (no matches), and removed a stale README sentence that still described F4–F8 as unavailable. Commit scope includes the accumulated commander menus/icons, file operations, compact direct-confirmation dialogs, silent success behavior, regression harnesses and documentation. Latest executed Rust/build/PTY evidence is recorded above; no runtime code changed during commit preparation, so tests were not repeated. No push requested.

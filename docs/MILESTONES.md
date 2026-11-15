@@ -61,3 +61,16 @@ No automatic OS package installation. No media-performance claim before live acc
 
 ## Out of scope for initial releases
 - Entire GUI application compatibility, browsers with full JS, Office editor, system-wide window manager, kernel/driver rewriting.
+
+## Approved F4–F8 file operations — 2026-11-15
+
+User explicitly requested implementation, superseding the earlier M1 exclusion for this scope.
+
+- [x] F4 bounded UTF-8 editor and confirmed save, with conflict detection and buffer recovery.
+- [x] F5/F6 marked-entry or selection copy/move; exclusive destinations, recursive copy, atomic same-filesystem move.
+- [x] F7 mkdir and F8 confirmed permanent recursive deletion.
+- [x] Descriptor-relative path safety, child symlink non-traversal, resource limits and failure reporting.
+- [x] Focused Rust regression tests, real-binary F4–F8 PTY fixture and browser/media PTY regression checks on macOS.
+- [ ] Linux execution and live Kitty visual acceptance; adversarial concurrent-writer and disk-full recovery checks.
+
+See FILE_OPERATIONS.md and STATUS.md for explicit limits and actual evidence. No expansion into DRM, system configuration or privileged services.

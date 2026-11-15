@@ -44,6 +44,26 @@ def check_exit(name, exit_key):
             output.extend(drain(master))
         assert b"MCS" in output, "TUI did not render"
         output.extend(drain(master, 0.3))  # Allow initial asynchronous scans to commit.
+        os.write(master, b"\x1bOP")  # F1
+        helped = drain(master, 0.3)
+        assert b"Help" in helped, "F1 did not open help"
+        output.extend(helped)
+        os.write(master, b"q")  # Close help, rather than exiting the browser.
+        output.extend(drain(master, 0.3))
+        assert process.poll() is None, "Closing help unexpectedly exited"
+        for menu_key in [b"\x1bOQ", b"\x1b[20~"]:  # F2 / F9
+            os.write(master, menu_key)
+            menu = drain(master, 0.3)
+            assert b"Main menu" in menu, "Function key did not open menu"
+            output.extend(menu)
+            os.write(master, b"\x1b")
+            output.extend(drain(master, 0.3))
+        os.write(master, b"\x1b[15~")  # F5 destination prompt; cancel without any write.
+        prompt = drain(master, 0.3)
+        assert b"Destination" in prompt, "F5 did not open destination dialog"
+        output.extend(prompt)
+        os.write(master, b"\x1b")
+        output.extend(drain(master, 0.3))
         for action in [b"\t", b"\r", b"\x7f", b" ", b"s", b".", b"[", b"]", b"B", b"b"]:
             os.write(master, action)
             output.extend(drain(master))
@@ -61,7 +81,7 @@ def check_exit(name, exit_key):
             output.extend(drain(master))
         os.write(master, b"q")
         returned = drain(master, 0.3)
-        assert b"Read-only" in returned, "Viewer did not restore browser"
+        assert b"F4-F8 files" in returned, "Viewer did not restore browser"
         output.extend(returned)
         os.write(master, b"\x1b")  # Clear retained browser filter.
         output.extend(drain(master, 0.3))
