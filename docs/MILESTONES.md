@@ -13,14 +13,28 @@ Each milestone requires evidence in STATUS.md. Proceed only on user approval.
 - [x] Bounded asynchronous scans; 20,000-entry macOS fixture, symlinks and permission failure tests passed
 - [x] Read-only MVP approved; copy/move/delete excluded until a separate confirmation specification and tests
 - [x] Unit + integration + terminal UI snapshot assertions; macOS PTY resize/restore checks
-- [ ] Linux TUI/SSH and Terminal.app/Kitty manual acceptance (not available in this session)
+- Linux/SSH acceptance moved to the long-term backlog; macOS viewer acceptance below.
 
-## M2 — Visual media proof-of-concept on macOS (Kitty)
-- [ ] Terminal capability detect; ordinary TUI fallback
-- [ ] PNG/JPEG image inside right preview, resize/scroll cleanup
-- [ ] PDF via external library (PDFium/Poppler evaluate license/packaging) in viewer
-- [ ] `libmpv` feasibility spike: may require an OS-native media surface rather than in-terminal pixels; measure frame rate, audio sync, CPU use
-- [ ] Honest report whether Kitty graphics meets video requirements; do not promise 1080p/60Hz via escape sequences
+## M2 — Approved macOS/Kitty F3 viewer (incremental checkpoints)
+
+### A — Large-file text
+- [x] F3/v fullscreen viewer, return to browser state, paging, wrap/numbers, reload
+- [x] Bounded seek-based multi-gigabyte reads, sparse indexing and cancellable literal search
+- [x] UTF-8/control handling, mutation/cancellation/resource tests, text PTY restoration
+
+### B — PNG/JPEG and searchable PDF
+- [x] Bounded Kitty capability query with text-only fallback; image decode/encoding off UI thread
+- [x] Fit/zoom/pan and resize, owned-ID cleanup, bounded image inputs/viewports
+- [x] Optional Poppler page rendering/search, output limits, timeout and cancellation
+- [x] Simulated Kitty and fake Poppler lifecycle/cleanup checks
+- [ ] Real Kitty image/PDF visual acceptance with installed Poppler
+
+### C — Terminal mpv video handoff
+- [x] Verify Kitty driver; controlled local-only arguments/input config and suspend/resume
+- [x] Fake-player success/failure and terminal restoration checks
+- [ ] Real Kitty/mpv playback and 60-second 720p/30 measurements (dimensions, drops, sync, CPU/memory)
+
+No automatic OS package installation. No media-performance claim before live acceptance. See VIEWER.md and STATUS.md.
 
 ## M3 — Ubuntu Server local DRM/KMS research spike (physical Linux laptop)
 - [ ] Confirm hardware/seat, active VT, `/dev/dri`, logind/seatd, evdev/libinput, permissions

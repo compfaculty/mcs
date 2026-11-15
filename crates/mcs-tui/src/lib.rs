@@ -1,3 +1,6 @@
+mod capabilities;
+mod graphics;
+mod viewer;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use mcs_core::{App, Pane};
 use ratatui::{
@@ -6,9 +9,10 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
 use std::{io, time::Duration};
+use viewer::{draw, handle_key, Ui};
 
 #[derive(Default)]
-struct Ui {
+struct BrowserUi {
     filter_before: Option<String>,
     bookmarks: bool,
     bookmark_index: usize,
@@ -35,16 +39,52 @@ pub fn run() -> io::Result<()> {
     };
     let mut restore = TerminalRestore(true);
     let mut ui = Ui::default();
+    if let Some(capabilities) = capabilities::probe() {
+        ui.viewer.font = Some(capabilities.font);
+        ui.viewer.compression = capabilities.compression;
+    }
+    let size = terminal.size()?;
+    ui.resize(size.width, size.height);
     let mut dirty = true;
     let result = loop {
         dirty |= app.poll();
+        dirty |= ui.poll();
+        if matches!(ui.viewer.screen, viewer::Screen::Playback(_)) {
+            let viewer::Screen::Playback(playback) = std::mem::take(&mut ui.viewer.screen) else {
+                unreachable!()
+            };
+            if let Err(error) = ui
+                .viewer
+                .flush_graphics()
+                .and_then(|()| ratatui::try_restore())
+            {
+                break Err(error);
+            }
+            let outcome = playback.run();
+            match ratatui::try_init() {
+                Ok(resumed) => terminal = resumed,
+                Err(error) => break Err(error),
+            }
+            if let Err(error) = terminal.clear() {
+                break Err(error);
+            }
+            match outcome {
+                Ok(mcs_media::video::Outcome::ExitApplication) => break Ok(()),
+                Ok(mcs_media::video::Outcome::Browser) => ui.viewer.close(),
+                Err(error) => ui.viewer.screen = viewer::Screen::Error(error.to_string()),
+            }
+            dirty = true;
+        }
+        if let Err(error) = ui.viewer.flush_graphics() {
+            break Err(error);
+        }
         if dirty {
             if let Err(error) = terminal.draw(|frame| draw(frame, &app, &ui)) {
                 break Err(error);
             }
             dirty = false;
         }
-        let loading = app.panes.iter().any(Pane::is_loading);
+        let loading = app.panes.iter().any(Pane::is_loading) || ui.busy();
         match event::poll(Duration::from_millis(if loading { 30 } else { 250 })) {
             Ok(true) => match event::read() {
                 Ok(Event::Key(key)) if key.kind != KeyEventKind::Release => {
@@ -53,7 +93,10 @@ pub fn run() -> io::Result<()> {
                     }
                     dirty = true;
                 }
-                Ok(Event::Resize(_, _)) => dirty = true,
+                Ok(Event::Resize(width, height)) => {
+                    ui.resize(width, height);
+                    dirty = true;
+                }
                 Ok(_) => {}
                 Err(error) => break Err(error),
             },
@@ -61,13 +104,15 @@ pub fn run() -> io::Result<()> {
             Err(error) => break Err(error),
         }
     };
-    let cleanup = ratatui::try_restore();
+    ui.viewer.close();
+    let graphics_cleanup = ui.viewer.flush_graphics();
+    let cleanup = ratatui::try_restore().and(graphics_cleanup);
     restore.0 = cleanup.is_err();
     result.and(cleanup)
 }
 
 // Returns true only for an explicit exit action. Editing never triggers browser commands.
-fn handle_key(app: &mut App, ui: &mut Ui, key: KeyEvent) -> bool {
+fn handle_browser_key(app: &mut App, ui: &mut BrowserUi, key: KeyEvent) -> bool {
     if key.code == KeyCode::F(10)
         || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c'))
     {
@@ -167,7 +212,7 @@ fn display_text(text: &str) -> String {
     result
 }
 
-fn draw(frame: &mut ratatui::Frame, app: &App, ui: &Ui) {
+fn draw_browser(frame: &mut ratatui::Frame, app: &App, ui: &BrowserUi) {
     let layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -178,7 +223,7 @@ fn draw(frame: &mut ratatui::Frame, app: &App, ui: &Ui) {
         ])
         .split(frame.area());
     frame.render_widget(
-        Paragraph::new("MCS M1 | Read-only | B add/remove bookmark; b sidebar"),
+        Paragraph::new("MCS | F3/v view | Read-only | B bookmark; b sidebar"),
         layout[0],
     );
     let body = if ui.bookmarks {
@@ -334,9 +379,9 @@ mod tests {
     fn app() -> App {
         App::new(PathBuf::from("/mcs-test"))
     }
-    fn render(app: &App, ui: &Ui, width: u16, height: u16) -> Vec<String> {
+    fn render(app: &App, ui: &BrowserUi, width: u16, height: u16) -> Vec<String> {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-        terminal.draw(|frame| draw(frame, app, ui)).unwrap();
+        terminal.draw(|frame| draw_browser(frame, app, ui)).unwrap();
         terminal
             .backend()
             .buffer()
@@ -354,50 +399,58 @@ mod tests {
     #[test]
     fn filter_mode_isolates_commands_and_esc_restores_filter() {
         let mut app = app();
-        let mut ui = Ui::default();
+        let mut ui = BrowserUi::default();
         app.active_mut().set_filter("before".into());
-        handle_key(&mut app, &mut ui, key(KeyCode::Char('/')));
-        assert!(!handle_key(&mut app, &mut ui, key(KeyCode::Char('q'))));
-        handle_key(&mut app, &mut ui, key(KeyCode::Tab));
+        handle_browser_key(&mut app, &mut ui, key(KeyCode::Char('/')));
+        assert!(!handle_browser_key(
+            &mut app,
+            &mut ui,
+            key(KeyCode::Char('q'))
+        ));
+        handle_browser_key(&mut app, &mut ui, key(KeyCode::Tab));
         assert_eq!(app.active, 0);
         assert_eq!(app.panes[0].filter, "beforeq");
-        handle_key(&mut app, &mut ui, key(KeyCode::Esc));
+        handle_browser_key(&mut app, &mut ui, key(KeyCode::Esc));
         assert_eq!(app.panes[0].filter, "before");
-        handle_key(&mut app, &mut ui, key(KeyCode::Char('/')));
-        handle_key(&mut app, &mut ui, key(KeyCode::Char('é')));
-        handle_key(&mut app, &mut ui, key(KeyCode::Backspace));
-        handle_key(&mut app, &mut ui, key(KeyCode::Enter));
+        handle_browser_key(&mut app, &mut ui, key(KeyCode::Char('/')));
+        handle_browser_key(&mut app, &mut ui, key(KeyCode::Char('é')));
+        handle_browser_key(&mut app, &mut ui, key(KeyCode::Backspace));
+        handle_browser_key(&mut app, &mut ui, key(KeyCode::Enter));
         assert!(ui.filter_before.is_none());
         assert_eq!(app.panes[0].filter, "before");
     }
     #[test]
     fn filter_size_is_bounded_and_ctrl_c_exits_from_any_mode() {
         let mut app = app();
-        let mut ui = Ui::default();
-        handle_key(&mut app, &mut ui, key(KeyCode::Char('/')));
+        let mut ui = BrowserUi::default();
+        handle_browser_key(&mut app, &mut ui, key(KeyCode::Char('/')));
         for _ in 0..300 {
-            handle_key(&mut app, &mut ui, key(KeyCode::Char('x')));
+            handle_browser_key(&mut app, &mut ui, key(KeyCode::Char('x')));
         }
         assert_eq!(app.panes[0].filter.len(), 256);
-        assert!(handle_key(
+        assert!(handle_browser_key(
             &mut app,
             &mut ui,
             KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)
         ));
-        assert!(handle_key(&mut app, &mut ui, key(KeyCode::F(10))));
+        assert!(handle_browser_key(&mut app, &mut ui, key(KeyCode::F(10))));
     }
     #[test]
     fn bookmark_sidebar_empty_navigation_and_normal_exit() {
         let mut app = app();
-        let mut ui = Ui::default();
-        handle_key(&mut app, &mut ui, key(KeyCode::Char('b')));
-        handle_key(&mut app, &mut ui, key(KeyCode::Down));
-        handle_key(&mut app, &mut ui, key(KeyCode::Enter));
+        let mut ui = BrowserUi::default();
+        handle_browser_key(&mut app, &mut ui, key(KeyCode::Char('b')));
+        handle_browser_key(&mut app, &mut ui, key(KeyCode::Down));
+        handle_browser_key(&mut app, &mut ui, key(KeyCode::Enter));
         assert!(!ui.bookmarks);
         assert_eq!(app.panes[0].path, PathBuf::from("/mcs-test"));
-        handle_key(&mut app, &mut ui, key(KeyCode::Char('B')));
+        handle_browser_key(&mut app, &mut ui, key(KeyCode::Char('B')));
         assert_eq!(app.bookmarks, [PathBuf::from("/mcs-test")]);
-        assert!(handle_key(&mut app, &mut ui, key(KeyCode::Char('q'))));
+        assert!(handle_browser_key(
+            &mut app,
+            &mut ui,
+            key(KeyCode::Char('q'))
+        ));
     }
     #[test]
     fn untrusted_display_text_cannot_inject_controls_or_bidi() {
@@ -415,21 +468,21 @@ mod tests {
     #[test]
     fn rendering_snapshots_at_standard_sizes_and_tiny_resize() {
         let app = app();
-        let ui = Ui::default();
+        let ui = BrowserUi::default();
         for (width, height) in [(80, 24), (100, 30)] {
             let rows = render(&app, &ui, width, height);
             assert_eq!(
                 rows[0],
-                "MCS M1 | Read-only | B add/remove bookmark; b sidebar"
+                "MCS | F3/v view | Read-only | B bookmark; b sidebar"
             );
             assert!(rows[1].starts_with("┌> /mcs-test | 0 loading"));
             assert!(rows[usize::from(height) - 7].starts_with("│Loading directory;"));
             assert!(rows[usize::from(height) - 4]
                 .starts_with("Filter:  | . hidden:false | s sort:Name | marks:0 | history:0/0"));
         }
-        let mut ui = Ui {
+        let mut ui = BrowserUi {
             bookmarks: true,
-            ..Ui::default()
+            ..BrowserUi::default()
         };
         for (width, height) in [(1, 1), (20, 5), (80, 24), (100, 30)] {
             render(&app, &ui, width, height);

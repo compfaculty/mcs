@@ -6,8 +6,8 @@ Goal: user-initiated, keyboard-first, MC-inspired file/terminal/system environme
 
 1. `mcs-core`: navigation, file models, actions, capabilities; no TUI/DRM imports.
 2. `mcs-tui`: text/ANSI renderer + keyboard via Ratatui/Crossterm. Works on macOS, Linux virtual console, SSH.
-3. Future `mcs-media`: image/PDF/video decoders and frame/time model (decoders independent of output).
-4. Future `mcs-terminal-graphics`: Kitty graphics / Sixel adapters where supported, not assumed in Linux virtual console.
+3. `mcs-viewer`: paged text, sparse line index, asynchronous routing/search state; no terminal imports. `mcs-media`: bounded PNG/JPEG decode, external Poppler adapters and prepared mpv handoff.
+4. `mcs-tui` graphics worker: confirmed Kitty output using ratatui-image, independent of media decoding. No graphics protocol is assumed on Linux virtual console.
 5. `mcs-native`: currently explicit Unsupported stub. Future DRM/KMS backend on Linux physical seat, independently owns display output and renders both TUI-like cell grid and media regions.
 6. Future `mcs-system`: interface + Linux-specific implementations of services/network/storage, read-only first; macOS capabilities differ.
 
@@ -31,7 +31,7 @@ MC-style dual panes + optional right preview, F3 viewer, file type routing, full
 - Normal SSH cannot transport DRM pixels without a separate streaming/remoting protocol; TUI can run over SSH.
 - Supporting arbitrary external GUI apps is out of scope.
 - Video inside same DRM surface requires compositor-like drawing within **our application**, not starting two competing direct DRM programs.
-- PDF rendering and video playback are not part of this starter code.
+- PDF rendering and video handoff are now optional macOS viewer adapters; real Kitty media acceptance is pending.
 
 ## M1 read-only navigation implementation
 
@@ -40,3 +40,9 @@ MC-style dual panes + optional right preview, F3 viewer, file type routing, full
 `mcs-tui` owns filter/sidebar input modes and display sanitization. It renders only visible rows, redraws on changes, and restores terminal modes on normal/error returns with a drop fallback. Filter input cannot invoke browser commands. The native backend remains an unsupported stub.
 
 Resource limits: 100,000 entries/scan, two workers/application, 128 back and forward locations per pane, 32 shared session bookmarks and 256 filter characters through the UI. Enumeration/sort is O(n log n) time/O(n) space; view filtering is O(n). Mark reconciliation on refresh uses O(n log n) time when marks exist. Filesystem reads are not cancellable: workers are detached and not joined on exit, so a blocked mount does not block application shutdown. No background daemon or persistent state is created.
+
+## Approved macOS viewer milestone
+
+F3/v switches an explicit screen enum between Browser, Loading, Text, Media, Playback and Error; browser state remains owned by the unchanged core. Search input and view preferences belong to the viewer. One persistent text/routing worker and one lazily created graphics worker use bounded channels and generation IDs. Superseded/closed requests cannot apply stale results. Indexing runs in bounded idle steps; search and helper operations check cancellation between chunks/polls. Ordinary filesystem reads remain non-interruptible.
+
+Only the main thread reads events or writes terminal output. It probes Kitty before event processing, draws pre-encoded images, deletes owned image IDs, and coordinates fullscreen playback suspend/resume. mpv alone owns the terminal during playback. No default GUI fallback, native renderer or OS installation is introduced. See VIEWER.md for exact limits, controls, dependencies and acceptance boundaries.

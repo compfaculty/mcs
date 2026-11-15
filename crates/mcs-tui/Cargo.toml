@@ -8,3 +8,9 @@ license.workspace = true
 mcs-core = { path = "../mcs-core" }
 ratatui = "0.30"
 crossterm = "0.29"
+mcs-viewer = { path = "../mcs-viewer" }
+mcs-media = { path = "../mcs-media" }
+ratatui-image = { version = "11.1", default-features = false, features = ["crossterm"] }
+
+[target.'cfg(unix)'.dependencies]
+mio = { version = "1.2", features = ["os-poll", "os-ext"] }

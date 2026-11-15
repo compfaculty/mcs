@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["apps/mcs", "crates/mcs-core", "crates/mcs-tui", "crates/mcs-native"]
+members = ["apps/mcs", "crates/mcs-core", "crates/mcs-tui", "crates/mcs-native", "crates/mcs-viewer", "crates/mcs-media"]
 
 [workspace.package]
 edition = "2021"

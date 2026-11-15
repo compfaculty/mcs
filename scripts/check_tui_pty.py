@@ -12,7 +12,7 @@ import termios
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-BINARY = ROOT / "target/debug/mcs"
+BINARY = Path(os.environ.get("MCS_TEST_BINARY", str(ROOT / "target/debug/mcs"))).resolve()
 
 
 def drain(master, seconds=0.15):
@@ -49,6 +49,21 @@ def check_exit(name, exit_key):
             output.extend(drain(master))
         assert b"Bookmarks" in output, "Bookmark sidebar did not render"
         os.write(master, b"\x1b")
+        output.extend(drain(master, 0.3))
+        os.write(master, b"/README\r")
+        output.extend(drain(master, 0.3))
+        os.write(master, b"\x1bOR")  # F3
+        viewed = drain(master, 0.4)
+        assert b"viewer" in viewed, "F3 did not open viewer"
+        output.extend(viewed)
+        for action in [b"/MCS\r", b"n", b"N", b"w", b"l", b"\x1b[6~"]:
+            os.write(master, action)
+            output.extend(drain(master))
+        os.write(master, b"q")
+        returned = drain(master, 0.3)
+        assert b"Read-only" in returned, "Viewer did not restore browser"
+        output.extend(returned)
+        os.write(master, b"\x1b")  # Clear retained browser filter.
         output.extend(drain(master, 0.3))
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 100, 0, 0))
         os.kill(process.pid, signal.SIGWINCH)
