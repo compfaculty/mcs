@@ -6,7 +6,7 @@ Recommended: Git (`git --version`); Kitty (`brew install --cask kitty`) for **la
 
 Later M2 optional tools: `brew install mpv yt-dlp ffmpeg pkg-config` (verify current formulas and library linkage with the chosen `libmpv` crate). PDF renderer dependencies chosen during M2 (do not install everything now).
 
-RustRover: File -> Open -> select extracted folder MCS_Starter_Kit; use stable toolchain. Open built-in terminal and run:
+RustRover: File -> Open -> select extracted folder `mcs`; use stable toolchain. Open built-in terminal and run:
 
 ```
 cargo check --workspace

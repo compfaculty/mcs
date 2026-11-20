@@ -1,5 +1,13 @@
 # Status / handoff
 
+## 2026-11-15 — Project folder rename to mcs
+
+The project root is now `/Users/alexg/projects/mcs` (formerly `MCS_Starter_Kit`). Preserved the existing installation-documentation change and completed local RustRover configuration repair: renamed `.idea/MCS_Starter_Kit.iml` to `.idea/mcs.iml`, updated `modules.xml`, and changed the last-opened path plus the selected/named Cargo test configuration in `workspace.xml`. Module content/source/test/exclusion paths now use `$PROJECT_DIR$`, because `$MODULE_DIR$` resolved inside `.idea`. These IDE settings are ignored by Git; no application source or dependencies changed. Reopen the `mcs` folder in RustRover to reload the settings.
+
+The first workspace test run exposed a cached test executable containing the former absolute `CARGO_MANIFEST_DIR`; `entry_limit_rejects_partial_listing` failed against the missing old crate directory. Confirmed the old path in the executable with `strings`. Ran `cargo clean` for the six workspace packages in both debug and release profiles, then rebuilt. Final `cargo check --workspace`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test --workspace` passed (66 tests, two optional Poppler experiments ignored). `cargo build -p mcs` and `cargo build --release -p mcs` passed.
+
+Parsed local IDE XML and verified every module/content/source/test/exclusion target exists. Searched tracked and ignored project files outside build artifacts/Git history; the former name remains only in this explanatory status entry. `git diff --check` passed. `python3 -u scripts/check_tui_pty.py` was attempted but stopped at its first CLI assertion because the active MCS instance causes duplicate launches to return silently with status 0. An independent nonblocking lock probe confirmed `ACTIVE_INSTANCE_LOCK`; no process was stopped. Manual terminal restoration was not rerun. Restart the running MCS process to use the rebuilt binary. No separate security scan was warranted for local path/settings changes; XML/path validation and diff review were performed. No commit/push or global IDE-preference changes.
+
 ## 2026-11-15 — MP4 startup probe timeout
 
 User reported F3 MP4 showing `Helper timed out`. Baseline repository was clean and workspace check/format/strict Clippy/tests passed (65 tests, two optional Poppler experiments ignored). Installed `/opt/homebrew/bin/mpv` 0.42.0 took 3.952 seconds for `--no-config --vo=help`, successfully reporting Kitty support; MCS's three-second probe deadline was too short. This failure precedes decoding the selected MP4.
